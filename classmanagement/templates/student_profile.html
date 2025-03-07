@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+{% block title %}Student Profile{% endblock %}
+{% block content %}
+<div class="container">
+    <h2>Welcome, {{ user.first_name }}!</h2>
+
+    <!-- Button to Add Teacher -->
+    <button class="btn btn-success mt-3" data-bs-toggle="modal" data-bs-target="#addTeacherModal">Add Teacher</button>
+
+    <!-- Modal to Add Teacher -->
+    <div class="modal fade" id="addTeacherModal" tabindex="-1" aria-labelledby="addTeacherModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addTeacherModalLabel">Add a Teacher</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form method="POST" action="{% url 'add_teacher' %}">
+                        {% csrf_token %}
+                        <label for="teacher_reference_id">Enter Teacher Reference ID:</label>
+                        <input type="text" name="teacher_reference_id" id="teacher_reference_id" class="form-control" required>
+                        <button type="submit" class="btn btn-primary mt-3">Add Teacher</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Teachers Assigned -->
+    <h3 class="mt-4">Your Teachers:</h3>
+    {% if teachers %}
+        <ul>
+            {% for teacher in teachers %}
+                <li>{{ teacher.first_name }} ({{ teacher.username }})</li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p>No teachers assigned.</p>
+    {% endif %}
+
+    <!-- Assigned Tasks -->
+    <h3 class="mt-4">Given Assignments</h3>
+    {% if assigned_tasks %}
+        <ul>
+            {% for task in assigned_tasks %}
+                <li>{{ task.title }} - Due: {{ task.due_date }}</li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p>No assignments given.</p>
+    {% endif %}
+
+    <!-- Submit Assignment -->
+    <h3 class="mt-4">Submit Assignment</h3>
+    {% if assignments %}
+        <ul>
+            {% for assignment in assignments %}
+                <li>
+                    {{ assignment.title }} - Due: {{ assignment.due_date }}
+                    <a href="{% url 'submit_assignment' assignment.id %}" class="btn btn-success btn-sm">Submit</a>
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p>No assignments to submit.</p>
+    {% endif %}
+
+    <!-- Button for Student Dashboard -->
+    <a href="{% url 'student_dashboard' %}" class="btn btn-primary mt-3">Go to Dashboard</a>
+</div>
+
+{% endblock %}

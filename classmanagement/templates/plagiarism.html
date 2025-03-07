@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Plagiarism Check{% endblock %}
+{% block content %}
+<div class="container">
+    <h2 class="text-center">Plagiarism Check</h2>
+    <div class="card">
+        <p>Check the submitted work for plagiarism.</p>
+        <a href="{% url 'check_plagiarism' %}" class="btn btn-danger w-100">Run Plagiarism Check</a>
+    </div>
+</div>
+{% endblock %}

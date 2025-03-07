@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Teacher Dashboard{% endblock %}
+{% block content %}
+<div class="container">
+    <h2 class="text-center">Teacher Dashboard</h2>
+
+    <!-- Top 3 Best Performers -->
+    <h3 class="mt-4">Top 3 Best Performers</h3>
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Rank</th>
+                <th>Student Name</th>
+                <th>Overall Score</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for student in top_performers %}
+            <tr>
+                <td>{{ forloop.counter }}</td>
+                <td><a href="{% url 'student_progress' student.id %}">{{ student.name }}</a></td>
+                <td>{{ student.overall_score }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- All Students Details -->
+    <h3 class="mt-4">All Students</h3>
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Student Name</th>
+                <th>Performance Score</th>
+                <th>View Progress</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for student in all_students %}
+            <tr>
+                <td><a href="{% url 'student_progress' student.id %}">{{ student.name }}</a></td>
+                <td>{{ student.overall_score }}</td>
+                <td>
+                    <a href="{% url 'student_progress' student.id %}" class="btn btn-info btn-sm">View Progress</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

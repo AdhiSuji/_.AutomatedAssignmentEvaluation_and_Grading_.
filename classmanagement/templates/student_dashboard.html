@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}Student Dashboard{% endblock %}
+{% block content %}
+<div class="container">
+    <h2 class="text-center">Student Dashboard</h2>
+
+    <!-- Progress Chart -->
+    <h3 class="mt-4">Your Performance Over Time</h3>
+    <canvas id="progressChart"></canvas>
+
+    <!-- Top 3 Best Performers -->
+    <h3 class="mt-4">Top 3 Best Performers</h3>
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Rank</th>
+                <th>Student Name</th>
+                <th>Overall Score</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for student in top_performers %}
+            <tr>
+                <td>{{ forloop.counter }}</td>
+                <td>{{ student.name }}</td>
+                <td>{{ student.overall_score }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Fireworks Celebration for Top 3 Performers -->
+    {% if student_rank in [1, 2, 3] %}
+    <div id="celebration-container">
+        <h2 class="congrats-text">🎉 Congratulations! You're {{ student_rank }}{% if student_rank == 1 %}st{% elif student_rank == 2 %}nd{% else %}rd{% endif %}! 🎉</h2>
+        <canvas id="fireworks"></canvas>
+        <audio id="fireworkSound" src="https://www.soundjay.com/explosion/explosion-01.mp3"></audio>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Chart.js for Progress Chart -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    var ctx = document.getElementById('progressChart').getContext('2d');
+    var progressChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: {{ labels|safe }},
+            datasets: [{
+                label: 'Performance Score',
+                data: {{ scores|safe }},
+                borderColor: 'blue',
+                backgroundColor: 'rgba(0, 0, 255, 0.1)',
+                borderWidth: 2,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+</script>
+
+<!-- Fireworks JavaScript with Sound -->
+{% if student_rank in [1, 2, 3] %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    if (document.getElementById("celebration-container")) {
+        startFireworks();
+    }
+});
+
+function startFireworks() {
+    const canvas = document.getElementById("fireworks");
+    const ctx = canvas.getContext("2d");
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const fireworks = [];
+    const fireworkSound = document.getElementById("fireworkSound");
+
+    function Firework(x, y) {
+        this.x = x;
+        this.y = y;
+        this.color = `hsl(${Math.random() * 360}, 100%, 50%)`;
+        this.size = Math.random() * 5 + 2;
+        this.speed = Math.random() * 5 + 2;
+        this.gravity = 0.2;
+        this.alpha = 1;
+
+        this.update = function () {
+            this.y -= this.speed;
+            this.speed -= this.gravity;
+            this.alpha -= 0.02;
+        };
+
+        this.draw = function () {
+            ctx.globalAlpha = this.alpha;
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+            ctx.fill();
+        };
+    }
+
+    function explode(x, y) {
+        for (let i = 0; i < 50; i++) {
+            fireworks.push(new Firework(x, y));
+        }
+        fireworkSound.play();
+    }
+
+    function animate() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        fireworks.forEach((firework, index) => {
+            firework.update();
+            firework.draw();
+            if (firework.alpha <= 0) fireworks.splice(index, 1);
+        });
+
+        requestAnimationFrame(animate);
+    }
+
+    setInterval(() => {
+        explode(Math.random() * canvas.width, Math.random() * canvas.height * 0.5);
+    }, 1000);
+
+    animate();
+}
+</script>
+{% endif %}
+
+<!-- Fireworks Celebration CSS -->
+<style>
+#celebration-container {
+    position: fixed;
+    top: 20%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 20px;
+    border-radius: 10px;
+    z-index: 1000;
+}
+
+.congrats-text {
+    font-size: 24px;
+    font-weight: bold;
+}
+
+#fireworks {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;
+    z-index: 999;
+}
+</style>
+
+{% endblock %}

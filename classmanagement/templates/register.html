@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2 class="text-center">Register</h2>
+
+    <form method="POST">
+        {% csrf_token %}
+
+        <!-- Show error messages -->
+        {% if messages %}
+        <div class="alert alert-danger">
+            {% for message in messages %}
+            <p>{{ message }}</p>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Role Selection -->
+        <label for="role">Role:</label>
+        <select name="role" id="role" class="form-control" required>
+            <option value="" disabled {% if not form_data.role %}selected{% endif %}>Select Role</option>
+            <option value="student" {% if form_data.role == "student" %}selected{% endif %}>Student</option>
+            <option value="teacher" {% if form_data.role == "teacher" %}selected{% endif %}>Teacher</option>
+        </select>
+
+        <!-- Fields for Students ONLY -->
+        <div id="student_fields" style="display: {% if form_data.role == 'student' %}block{% else %}none{% endif %};">
+            <label for="roll_number">Roll Number:</label>
+            <input type="text" name="roll_number" id="roll_number" class="form-control"
+                   value="{{ form_data.roll_number|default:'' }}">
+
+            <label for="username">Username (Auto-Generated):</label>
+            <input type="text" name="username" id="username" class="form-control" readonly>
+        </div>
+
+        <!-- Fields for ALL Users -->
+        <label for="first_name">First Name:</label>
+        <input type="text" name="first_name" id="first_name" class="form-control" 
+               value="{{ form_data.first_name|default:'' }}" required>
+
+        <label for="last_name">Last Name:</label>
+        <input type="text" name="last_name" id="last_name" class="form-control" 
+               value="{{ form_data.last_name|default:'' }}" required>
+
+        <label for="email">Email:</label>
+        <input type="email" name="email" id="email" class="form-control"
+               value="{{ form_data.email|default:'' }}" required>
+
+        <!-- Password Fields with Show Password Option -->
+        <label for="password">Password:</label>
+        <input type="password" id="password" name="password" class="form-control" required>
+
+        <label for="confirm_password">Confirm Password:</label>
+        <input type="password" id="confirm_password" name="confirm_password" class="form-control" required>
+
+        <!-- Show Password Checkbox -->
+        <div class="mt-2">
+            <input type="checkbox" id="showPassword"> Show Password
+        </div>
+
+        <button type="submit" class="btn btn-success mt-3">Register</button>
+    </form>
+</div>
+
+<!-- JavaScript to Handle Role Selection, Username Generation & Show Password Feature -->
+<script>
+    document.getElementById("role").addEventListener("change", function() {
+        let role = this.value;
+        let studentFields = document.getElementById("student_fields");
+
+        if (role === "student") {
+            studentFields.style.display = "block";
+        } else {
+            studentFields.style.display = "none";
+        }
+    });
+
+    // Generate Username Automatically (Roll Number + First Name)
+    function generateUsername() {
+        let rollNumber = document.getElementById("roll_number").value.trim();
+        let firstName = document.getElementById("first_name").value.trim();
+        if (rollNumber && firstName) {
+            document.getElementById("username").value = rollNumber + "_" + firstName.toUpperCase();
+        } else {
+            document.getElementById("username").value = "";
+        }
+    }
+
+    document.getElementById("roll_number").addEventListener("input", generateUsername);
+    document.getElementById("first_name").addEventListener("input", generateUsername);
+
+    // Show/Hide Password Functionality
+    document.getElementById("showPassword").addEventListener("change", function() {
+        let password = document.getElementById("password");
+        let confirmPassword = document.getElementById("confirm_password");
+        
+        if (this.checked) {
+            password.type = "text";
+            confirmPassword.type = "text";
+        } else {
+            password.type = "password";
+            confirmPassword.type = "password";
+        }
+    });
+</script>
+{% endblock %}

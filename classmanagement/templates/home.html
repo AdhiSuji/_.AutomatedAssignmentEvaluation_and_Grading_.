@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% block title %}Home{% endblock %}
+
+{% block content %}
+<div class="text-center">
+    <h1>Welcome to the Assignment Submission System</h1>
+    <p> Submit assignments easily and track your progress. </p>
+        <a href="{% url 'login' %}" class="btn btn-primary">Login</a>
+        <a href="{% url 'register' %}" class="btn btn-success">Register</a>
+</div>
+{% endblock %}

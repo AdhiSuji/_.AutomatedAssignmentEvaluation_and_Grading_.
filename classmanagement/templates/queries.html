@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Queries{% endblock %}
+{% block content %}
+<div class="container">
+    <h2 class="text-center">Ask a Query</h2>
+    <div class="card">
+        <form method="post">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <button type="submit" class="btn btn-primary w-100">Submit Query</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
