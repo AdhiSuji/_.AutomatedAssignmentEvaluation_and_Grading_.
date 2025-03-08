@@ -1,6 +1,6 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
-from .models import CustomUser, Assignment, Submission, Query, Class, StudentProfile
+from .models import CustomUser, Assignment, Submission, Query, Classroom, StudentProfile
 
 
 class UserRegistrationForm(UserCreationForm):
@@ -11,7 +11,7 @@ class UserRegistrationForm(UserCreationForm):
 
     role = forms.ChoiceField(choices=ROLE_CHOICES, required=True, widget=forms.RadioSelect)
     selected_class = forms.ModelChoiceField(
-        queryset=Class.objects.all(),
+        queryset=Classroom.objects.all(),
         empty_label="Select Class (Only for Students)",
         required=False  # Teachers don't need this field
     )
@@ -38,9 +38,31 @@ class LoginForm(forms.Form):
 
 class ClassForm(forms.ModelForm):
     class Meta:
-        model = Class
+        model = Classroom
         fields = ['name']
         
+
+class StudentProfileForm(forms.ModelForm):
+    reference_id = forms.CharField(
+        required=False, 
+        label="Enter Teacher Reference ID", 
+        widget=forms.TextInput(attrs={"placeholder": "Enter Reference ID"})
+    )
+    class_id = forms.ModelChoiceField(
+        queryset=Classroom.objects.none(),
+        required=False,
+        label="Select Class",
+        widget=forms.Select(attrs={"disabled": "disabled"})
+    )
+
+    class Meta:
+        model = StudentProfile
+        fields = ["reference_id", "class_id"]
+
+    def __init__(self, *args, **kwargs):
+        super(StudentProfileForm, self).__init__(*args, **kwargs)
+        self.fields["class_id"].queryset = Classroom.objects.none()
+
 
 # Assignment Creation Form (For Teachers)
 class AssignmentForm(forms.ModelForm):
@@ -69,17 +91,17 @@ class QueryResponseForm(forms.ModelForm):
 # Class Creation Form (For Teachers)
 class ClassCreationForm(forms.ModelForm):
     class Meta:
-        model = Class
+        model = Classroom
         fields = ['name']
 
 # Class Enrollment Form (For Students)
 class EnrollmentForm(forms.Form):
     reference_id = forms.CharField(max_length=10, help_text="Enter teacher's reference ID")
-    selected_class = forms.ModelChoiceField(queryset=Class.objects.none())
+    selected_class = forms.ModelChoiceField(queryset=Classroom.objects.none())
 
     def __init__(self, *args, **kwargs):
         teacher = kwargs.pop('teacher', None)
         super(EnrollmentForm, self).__init__(*args, **kwargs)
         if teacher:
-            self.fields['selected_class'].queryset = Class.objects.filter(teacher=teacher)
+            self.fields['selected_class'].queryset = Classroom.objects.filter(teacher=teacher)
 

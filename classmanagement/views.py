@@ -4,9 +4,11 @@ from django.contrib import messages
 from django.utils import timezone
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate, login, logout, get_user_model
-from .models import CustomUser, Class, Assignment, Submission, Performance, Query,  StudentProfile, TeacherProfile 
+from .models import CustomUser, Classroom, Assignment, Submission, Performance, Query,  StudentProfile, TeacherProfile 
 from .forms import UserRegistrationForm, AssignmentForm, SubmissionForm, LoginForm, QueryForm, QueryResponseForm, ClassForm
 from django.core.mail import send_mail
+from django.http import JsonResponse
+
 
 # Home View
 def home_view(request):
@@ -18,38 +20,38 @@ def user_login(request):
         email = request.POST.get("email")
         password = request.POST.get("password")
 
-        # Check if the email exists
-        try:
-            user = CustomUser.objects.get(email=email)
-        except CustomUser.DoesNotExist:
-            messages.error(request, "No account found with this email!")
-            return redirect("login")
-
-        # Authenticate user
-        user = authenticate(request, username=email, password=password)
+        # Authenticate using email
+        user = authenticate(request, email=email, password=password)
 
         if user is None:
-            messages.error(request, "Invalid password! Please try again.")
+            messages.error(request, "Invalid email or password! Please try again.")
             return redirect("login")
 
         # Log in the user
         login(request, user)
         messages.success(request, "Login successful!")
 
-        # ✅ Ensure the correct profile is accessed
         if user.role == "student":
             student_profile, created = StudentProfile.objects.get_or_create(student=user)
-            return redirect("student_profile")  # Redirect to Student Profile
+
+            # ✅ Ensure student has an assigned class before redirecting
+            if student_profile.assigned_class:
+                return redirect("student_dashboard", class_id=student_profile.assigned_class.id)
+            else:
+                messages.error(request, "No class assigned! Contact your teacher.")
+                return redirect("student_profile")
+
         elif user.role == "teacher":
-            teacher_profile, created = TeacherProfile.objects.get_or_create(teacher=user)
-            return redirect("teacher_profile")  # Redirect to Teacher Dashboard
+            TeacherProfile.objects.get_or_create(teacher=user)
+            
+            # ✅ Redirect to Teacher Profile instead of hardcoded dashboard
+            return redirect("teacher_profile")
+
         else:
             messages.error(request, "Invalid role! Contact admin.")
-            return redirect("login")  # Default redirect
+            return redirect("login")
 
     return render(request, "login.html")
-
-
 
 def user_logout(request):
     logout(request)
@@ -93,8 +95,10 @@ def register(request):
         # Redirect based on role
         if role == "student":
             StudentProfile.objects.create(student=user)
+            return redirect("student_profile") 
         else:
             TeacherProfile.objects.create(teacher=user)
+            return redirect("teacher_profile") 
     return render(request, "register.html")
 
 
@@ -109,13 +113,27 @@ def student_profile(request):
     return render(request, 'student_profile.html', {
         'assignments': assignments,
         'performance': performance,
+        'class_id': student_profile.assigned_class.id if student_profile.assigned_class else None,
     })
+
+def get_teacher_classes(request):
+    reference_id = request.GET.get("reference_id", None)
+    
+    if reference_id:
+        try:
+            teacher = User.objects.get(reference_id=reference_id, role="teacher")
+            classes = Classroom.objects.filter(teacher=teacher).values("id", "name")
+            return JsonResponse({"classes": list(classes)}, safe=False)
+        except User.DoesNotExist:
+            return JsonResponse({"error": "Invalid Teacher Reference ID!"}, status=400)
+    
+    return JsonResponse({"error": "No reference ID provided!"}, status=400)
 
 # Teacher Profile
 @login_required
 def teacher_profile(request):
     teacher = request.user
-    classes = Class.objects.filter(teacher=teacher)
+    classes = Classroom.objects.filter(teacher=teacher)
     return render(request, 'teacher_profile.html', {'classes': classes})
 
 @login_required
@@ -136,7 +154,7 @@ def create_class(request):
     return render(request, 'create_class.html', {'form': form})
 
 def delete_class(request, class_id):
-    class_obj = get_object_or_404(Class, id=class_id, teacher=request.user)
+    class_obj = get_object_or_404(Classroom, id=class_id, teacher=request.user)
 
     if request.method == "POST":
         class_obj.delete()
@@ -156,7 +174,7 @@ def enroll_student(request):
 
         try:
             teacher = CustomUser.objects.get(reference_id=reference_id, role='teacher')
-            selected_class = Class.objects.get(id=class_id, teacher=teacher)
+            selected_class = Classroom.objects.get(id=class_id, teacher=teacher)
             student_profile = get_object_or_404(StudentProfile, student=request.user)
             student_profile.assigned_class = selected_class
             student_profile.save()
@@ -165,17 +183,21 @@ def enroll_student(request):
             return redirect('student_dashboard')
         except CustomUser.DoesNotExist:
             messages.error(request, "Invalid Teacher Reference ID.")
-        except Class.DoesNotExist:
+        except Classroom.DoesNotExist:
             messages.error(request, "Invalid Class Selection.")
 
-    classes = Class.objects.all()
+    classes = Classroom.objects.all()
     return render(request, 'enroll_student.html', {'classes': classes})
 
 
 @login_required
 def add_teacher(request):
     if request.user.role != 'admin':
-        return redirect('dashboard')  # Only admins can add teachers
+        student = request.user  # Assuming user is a student
+        if student.assigned_class:
+            return redirect('student_dashboard', class_id=student.assigned_class.id)
+        else:
+            return redirect('student_profile')  # Safe fallback
 
     if request.method == "POST":
         form =UserRegistrationForm(request.POST)
@@ -205,7 +227,7 @@ def give_assignment(request):
 
 
 def given_assignment(request, class_id):
-    class_obj = get_object_or_404(Class, id=class_id)
+    class_obj = get_object_or_404(Classroom, id=class_id)
     assignments = Assignment.objects.filter(class_assigned=class_obj)  # Adjust field name if different
 
     return render(request, "given_assignment.html", {"assignments": assignments, "class_obj": class_obj})
@@ -274,7 +296,7 @@ def student_progress(request, student_id):
 
 # Notification for Pending Submissions
 def send_notifications():
-    pending_students = CustomUser.objects.filter(role='student').exclude(submissions__graded=True)
+    pending_students = CustomUser.objects.filter(role="student", submission__graded=False).distinct()
     for student in pending_students:
         send_mail(
             'Assignment Reminder',
@@ -320,5 +342,15 @@ def respond_query(request, query_id):
 def teacher_dashboard(request):
     return render(request, "teacher_dashboard.html")
 
-def student_dashboard(request):
-    return render(request, "student_dashboard.html")
+@login_required
+def student_dashboard(request, class_id):
+    student_profile = get_object_or_404(StudentProfile, student=request.user)
+
+    if student_profile.assigned_class is None:
+        messages.error(request, "You are not enrolled in any class yet!")
+        return redirect("student_profile")  
+
+    # Fetch assignments related to the class
+    assignments = Assignment.objects.filter(assigned_class_id=class_id)
+    
+    return render(request, "student_dashboard.html", {"assignments": assignments})

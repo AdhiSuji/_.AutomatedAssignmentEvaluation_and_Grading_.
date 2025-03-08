@@ -56,12 +56,13 @@ class CustomUser(AbstractUser):
 
 
 # Class Model (Teachers can create classes)
-class Class(models.Model):
+class Classroom(models.Model):
     name = models.CharField(max_length=100)
     teacher = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='classes')
     
     def __str__(self):
         return self.name
+
 
 class TeacherProfile(models.Model):
     teacher = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name="teacher_profile")
@@ -72,10 +73,10 @@ class TeacherProfile(models.Model):
 # Student Profile (Linked to Classes)
 class StudentProfile(models.Model):
     student = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='student_profile')
-    assigned_class = models.ForeignKey(Class, on_delete=models.SET_NULL, null=True, blank=True)
+    assigned_class = models.ForeignKey(Classroom, on_delete=models.SET_NULL, null=True, blank=True)
     
     def __str__(self):
-        return self.student.first_name
+        return f"{self.student.email} - {self.assigned_class.name if self.assigned_class else 'No Class'}"
 # Assignments
 class Assignment(models.Model):
     title = models.CharField(max_length=255)
@@ -83,7 +84,7 @@ class Assignment(models.Model):
     due_date = models.DateTimeField()  # Ensure this field is present
     keywords = models.TextField(blank=True, null=True)  # Ensure this field is present
     teacher = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='assignments')
-    assigned_class = models.ForeignKey(Class, on_delete=models.CASCADE, related_name='assignments', null=True, blank=True, default=None)
+    assigned_class = models.ForeignKey(Classroom, on_delete=models.CASCADE, related_name='assignments', null=True, blank=True, default=None)
 
     def __str__(self):
         return self.title

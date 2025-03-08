@@ -17,7 +17,7 @@ urlpatterns = [
     # Assignments
     path('assignments/give/<int:class_id>/', views.give_assignment, name='give_assignment'),
     path("assignments/given/<int:class_id>/", views.given_assignment, name="given_assignment"),
-    path('assignments/submit/', views.submit_assignment, name='submit_assignment'),
+    path('assignments/submit/submit/<int:assignment_id>/', views.submit_assignment, name='submit_assignment'),
     path('assignments/view/', views.view_submissions, name='view_submissions'),
     path('assignments/grade/', views.grade_assignment, name='grade_assignment'),
 
@@ -32,6 +32,7 @@ urlpatterns = [
     path('class/create/', views.create_class, name='create_class'),
     path('class/enroll/', views.enroll_student, name='enroll_student'),
     path("delete_class/<int:class_id>/", views.delete_class, name="delete_class"),
+    path('get_teacher_classes/', views.get_teacher_classes, name='get_teacher_classes'),
 
     # Notifications
     path('notifications/send/', views.send_notifications, name='send_notifications'),

@@ -22,7 +22,7 @@
             {% for student in top_performers %}
             <tr>
                 <td>{{ forloop.counter }}</td>
-                <td>{{ student.name }}</td>
+                <td>{{ student.student.get_full_name }}</td>
                 <td>{{ student.overall_score }}</td>
             </tr>
             {% endfor %}
@@ -30,7 +30,7 @@
     </table>
 
     <!-- Fireworks Celebration for Top 3 Performers -->
-    {% if student_rank in [1, 2, 3] %}
+    {% if student_rank == 1 or student_rank == 2 or student_rank == 3 %}
     <div id="celebration-container">
         <h2 class="congrats-text">🎉 Congratulations! You're {{ student_rank }}{% if student_rank == 1 %}st{% elif student_rank == 2 %}nd{% else %}rd{% endif %}! 🎉</h2>
         <canvas id="fireworks"></canvas>
@@ -39,17 +39,25 @@
     {% endif %}
 </div>
 
+<!-- JSON-Safe Chart Data -->
+<script id="chart-data" type="application/json">{{ labels|safe }}</script>
+<script id="chart-scores" type="application/json">{{ scores|safe }}</script>
+
 <!-- Chart.js for Progress Chart -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+document.addEventListener("DOMContentLoaded", function () {
+    var labels = JSON.parse(document.getElementById("chart-data").textContent);
+    var scores = JSON.parse(document.getElementById("chart-scores").textContent);
+
     var ctx = document.getElementById('progressChart').getContext('2d');
     var progressChart = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: {{ labels|safe }},
+            labels: labels,
             datasets: [{
                 label: 'Performance Score',
-                data: {{ scores|safe }},
+                data: scores,
                 borderColor: 'blue',
                 backgroundColor: 'rgba(0, 0, 255, 0.1)',
                 borderWidth: 2,
@@ -65,10 +73,11 @@
             }
         }
     });
+});
 </script>
 
-<!-- Fireworks JavaScript with Sound -->
-{% if student_rank in [1, 2, 3] %}
+<!-- Fireworks Celebration JS -->
+{% if student_rank == 1 or student_rank == 2 or student_rank == 3 %}
 <script>
 document.addEventListener("DOMContentLoaded", function () {
     if (document.getElementById("celebration-container")) {
