@@ -4,6 +4,11 @@
 <div class="container">
     <h2 class="text-center">Student Dashboard</h2>
 
+    <!-- Profile Button -->
+    <div class="text-end">
+        <a href="{% url 'student_profile' %}" class="btn btn-success">My Profile</a>
+    </div>
+
     <!-- Progress Chart -->
     <h3 class="mt-4">Your Performance Over Time</h3>
     <canvas id="progressChart"></canvas>

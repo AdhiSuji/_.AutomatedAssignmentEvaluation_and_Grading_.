@@ -1,36 +1,74 @@
 {% extends "base.html" %}
 
+{% block title %}Teacher Profile{% endblock %}
+
 {% block content %}
 <div class="container mt-5">
-    <h2 class="text-center">Teacher Profile</h2>
+    <h2 class="text-center mb-4">Teacher Profile</h2>
 
     <p><strong>Welcome, {{ user.first_name }}!</strong></p>
     <p><strong>Your Reference ID:</strong> {{ user.reference_id }}</p>
 
-    <!-- Create Class Button -->
-    <h3>Manage Your Classes</h3>
-    <a href="{% url 'create_class' %}" class="btn btn-success mb-3">+ Create Class</a>
+    <!-- ➕ Create Class Button -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3>Your Classes</h3>
+        <a href="{% url 'create_class' %}" class="btn btn-success">+ Create Class</a>
+    </div>
 
-    <!-- Display Created Classes -->
+    <!-- 🏫 Display Created Classes and Students -->
     {% if classes %}
-        <ul class="list-group">
+        <div class="accordion" id="classesAccordion">
             {% for class_obj in classes %}
-                <li class="list-group-item d-flex justify-content-between align-items-center">
-                    <strong>{{ class_obj.name }}</strong>
-                    <div class="mt-2">
-                        <a href="{% url 'give_assignment' class_obj.id %}" class="btn btn-primary btn-sm">Assign Task</a>
-                        <a href="{% url 'teacher_dashboard' class_obj.id %}" class="btn btn-primary btn-sm">View Dashboard</a>
-                        <a href="{% url 'given_assignment' class_obj.id %}" class="btn btn-primary btn-sm">View Tasks</a>
-                        <form action="{% url 'delete_class' class_obj.id %}" method="POST" class="d-inline">
-                            {% csrf_token %}
-                            <button type="submit" class="btn btn-danger btn-sm">Remove</button>
-                        </form>
+                <div class="accordion-item mb-3">
+                    <h2 class="accordion-header" id="heading{{ forloop.counter }}">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ forloop.counter }}" aria-expanded="false" aria-controls="collapse{{ forloop.counter }}">
+                            {{ class_obj.name }}
+                        </button>
+                    </h2>
+                    <div id="collapse{{ forloop.counter }}" class="accordion-collapse collapse" aria-labelledby="heading{{ forloop.counter }}" data-bs-parent="#classesAccordion">
+                        <div class="accordion-body">
+                            <!-- Class Actions -->
+                            <div class="mb-3">
+                                <a href="{% url 'give_assignment' class_obj.id %}" class="btn btn-primary btn-sm me-1">Assign Task</a>
+                                <a href="{% url 'teacher_dashboard' class_obj.id %}" class="btn btn-info btn-sm me-1">View Dashboard</a>
+                                <a href="{% url 'given_assignment' class_obj.id %}" class="btn btn-warning btn-sm me-1">View Tasks</a>
+                                <form action="{% url 'delete_class' class_obj.id %}" method="POST" class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-danger btn-sm">Delete Class</button>
+                                </form>
+                            </div>
+
+                            <!-- 👨‍🎓 List Students Enrolled in the Class -->
+                            <h5 class="mt-3">Enrolled Students</h5>
+                            {% if class_obj.students.all %}
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Student Name</th>
+                                            <th>Email</th>
+                                            <th>Enrolled On</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for student in class_obj.students.all %}
+                                            <tr>
+                                                <td>{{ student.get_full_name }}</td>
+                                                <td>{{ student.email }}</td>
+                                                <td>{{ student.enrollment_date|date:"F j, Y" }}</td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            {% else %}
+                                <p class="text-muted">No students enrolled in this class yet.</p>
+                            {% endif %}
+                        </div>
                     </div>
-                </li>
+                </div>
             {% endfor %}
-        </ul>
+        </div>
     {% else %}
-        <p>No classes created yet.</p>
+        <p class="alert alert-warning">You haven't created any classes yet. Click "Create Class" to get started!</p>
     {% endif %}
 </div>
 {% endblock %}

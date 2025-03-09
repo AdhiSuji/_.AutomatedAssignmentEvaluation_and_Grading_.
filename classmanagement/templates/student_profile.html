@@ -5,15 +5,15 @@
 <div class="container">
     <h2>Welcome, {{ user.first_name }}!</h2>
 
-    <!-- Button to Add Teacher -->
-    <button class="btn btn-success mt-3" data-bs-toggle="modal" data-bs-target="#addTeacherModal">Add Teacher</button>
+    <!-- ✅ Add Teacher Button -->
+    <button class="btn btn-success mt-3" data-bs-toggle="modal" data-bs-target="#addTeacherModal">Join New Class</button>
 
-    <!-- Modal to Add Teacher -->
+    <!-- ✅ Modal for Adding a Teacher/Class -->
     <div class="modal fade" id="addTeacherModal" tabindex="-1" aria-labelledby="addTeacherModalLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="addTeacherModalLabel">Add a Teacher</h5>
+                    <h5 class="modal-title" id="addTeacherModalLabel">Join a Class</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
@@ -21,68 +21,75 @@
                         {% csrf_token %}
                         <label for="teacher_reference_id">Enter Teacher Reference ID:</label>
                         <input type="text" name="teacher_reference_id" id="teacher_reference_id" class="form-control" required>
-                        
-                        <!-- Dropdown for classes -->
+
+                        <!-- Dropdown for Classes -->
                         <label for="class_selection" class="mt-2">Select Class:</label>
                         <select name="assigned_class" id="class_selection" class="form-control" disabled>
                             <option value="">Enter Reference ID first</option>
                         </select>
 
-                        <button type="submit" class="btn btn-primary mt-3" id="addTeacherBtn" disabled>Add Teacher</button>
+                        <button type="submit" class="btn btn-primary mt-3" id="addTeacherBtn" disabled>Join Class</button>
                     </form>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Teachers Assigned -->
-    <h3 class="mt-4">Your Teachers:</h3>
-    {% if teachers %}
-        <ul>
-            {% for teacher in teachers %}
-                <li>{{ teacher.first_name }} ({{ teacher.username }})</li>
+    <!-- ✅ List of Joined Classes -->
+    <h3 class="mt-4">Your Classes</h3>
+    {% if joined_classes %}
+        <div class="accordion" id="classesAccordion">
+            {% for classroom in joined_classes %}
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="heading{{ forloop.counter }}">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ forloop.counter }}" aria-expanded="false" aria-controls="collapse{{ forloop.counter }}">
+                            {{ classroom.name }}
+                        </button>
+                    </h2>
+                    <div id="collapse{{ forloop.counter }}" class="accordion-collapse collapse" aria-labelledby="heading{{ forloop.counter }}" data-bs-parent="#classesAccordion">
+                        <div class="accordion-body">
+                            
+                            <!-- ✅ Teachers of the Class -->
+                            <h5>Teacher(s):</h5>
+                            {% if classroom.teachers.all %}
+                                <ul>
+                                    {% for teacher in classroom.teachers.all %}
+                                        <li>{{ teacher.get_full_name }} ({{ teacher.email }})</li>
+                                    {% endfor %}
+                                </ul>
+                            {% else %}
+                                <p class="text-danger">No teachers found for this class.</p>
+                            {% endif %}
+
+                            <!-- ✅ Assignments for the Class -->
+                            <h5 class="mt-3">Assignments:</h5>
+                            {% if classroom.assignments.all %}
+                                <ul>
+                                    {% for assignment in classroom.assignments.all %}
+                                        <li>
+                                            <strong>{{ assignment.title }}</strong> - Due: {{ assignment.due_date }}
+                                            <a href="{% url 'submit_assignment' assignment.id %}" class="btn btn-success btn-sm ms-2">Submit</a>
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            {% else %}
+                                <p class="text-warning">No assignments given for this class.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
             {% endfor %}
-        </ul>
+        </div>
     {% else %}
-        <p>No teachers assigned.</p>
+        <p class="text-danger">You are not enrolled in any classes. Please join a class.</p>
     {% endif %}
 
-    <!-- Given Assignments -->
-    <h3 class="mt-4">Given Assignments</h3>
-    {% if assigned_tasks %}
-        <ul>
-            {% for task in assigned_tasks %}
-                <li>{{ task.title }} - Due: {{ task.due_date }}</li>
-            {% endfor %}
-        </ul>
-    {% else %}
-        <p>No assignments given.</p>
-    {% endif %}
-
-    <!-- Submit Assignment -->
-    <h3 class="mt-4">Submit Assignment</h3>
-    {% if assignments %}
-        <ul>
-            {% for assignment in assignments %}
-                <li>
-                    {{ assignment.title }} - Due: {{ assignment.due_date }}
-                    <a href="{% url 'submit_assignment' assignment.id %}" class="btn btn-success btn-sm">Submit</a>
-                </li>
-            {% endfor %}
-        </ul>
-    {% else %}
-        <p>No assignments to submit.</p>
-    {% endif %}
-
-    <!-- Student Dashboard -->
-    {% if class_id %}
-    <a href="{% url 'student_dashboard' class_id=class_id %}" class="btn btn-primary mt-3">Go to Dashboard</a>
-{% else %}
-    <p class="text-warning">No class assigned. Please contact your teacher.</p>
-{% endif %}
+    <!-- ✅ Dashboard Link -->
+    <a href="{% url 'student_dashboard' %}" class="btn btn-primary mt-4">Go to Dashboard</a>
 
 </div>
 
+<!-- ✅ JavaScript to Enable Class Dropdown after Entering Teacher Reference ID -->
 <script>
 document.getElementById("teacher_reference_id").addEventListener("input", function() {
     let referenceID = this.value;

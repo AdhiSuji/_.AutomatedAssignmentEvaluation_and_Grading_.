@@ -7,14 +7,13 @@ from sklearn.metrics.pairwise import cosine_similarity
 import uuid
 
 
+# Custom User Manager
 class CustomUserManager(BaseUserManager):
-    """Custom user model manager where email is the unique identifier instead of username"""
-
     def create_user(self, email, password=None, **extra_fields):
         if not email:
             raise ValueError("The Email field must be set")
         email = self.normalize_email(email)
-        extra_fields.setdefault("username", email.split("@")[0])  # Set username automatically
+        extra_fields.setdefault("username", email.split("@")[0])
         user = self.model(email=email, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
@@ -25,6 +24,7 @@ class CustomUserManager(BaseUserManager):
         extra_fields.setdefault("is_superuser", True)
         return self.create_user(email, password, **extra_fields)
 
+# Custom User Model
 class CustomUser(AbstractUser):
     ROLE_CHOICES = [
         ('admin', 'Admin'),
@@ -32,66 +32,65 @@ class CustomUser(AbstractUser):
         ("teacher", "Teacher"),
     ]
 
-    username = models.CharField(max_length=150, unique=True, blank=True, null=True)  # Allow blank username
-    email = models.EmailField(unique=True)  # Use email as primary identifier
+    username = models.CharField(max_length=150, unique=True, blank=True, null=True)
+    email = models.EmailField(unique=True)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="student")
     reference_id = models.CharField(max_length=12, unique=True, null=True, blank=True)
-    USERNAME_FIELD = "email"  # Set email as the primary field for authentication
-    REQUIRED_FIELDS = ["username"]  # Keep username but auto-generate it
+
+    USERNAME_FIELD = "email"
+    REQUIRED_FIELDS = ["username"]
 
     objects = CustomUserManager()
 
     def save(self, *args, **kwargs):
         if not self.username:
-            self.username = self.email.split("@")[0]  # Auto-generate username from email
-        super().save(*args, **kwargs)
-    
-    def save(self, *args, **kwargs):
+            self.username = self.email.split("@")[0]
         if self.role == "teacher" and not self.reference_id:
-            self.reference_id = "TCH-" + str(uuid.uuid4().hex[:8]).upper()  # Generate Unique Reference ID
+            self.reference_id = "TCH-" + str(uuid.uuid4().hex[:8]).upper()
         super().save(*args, **kwargs)
 
     def __str__(self):
         return self.email
-
-
-# Class Model (Teachers can create classes)
-class Classroom(models.Model):
-    name = models.CharField(max_length=100)
-    teacher = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='classes')
     
-    def __str__(self):
-        return self.name
-
-
 class TeacherProfile(models.Model):
     teacher = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name="teacher_profile")
-    
-    def __str__(self):
-        return self.teacher.first_name
 
-# Student Profile (Linked to Classes)
+    def __str__(self):
+        return f"{self.teacher.first_name or self.teacher.email}"
+
+# Classroom Model
+class Classroom(models.Model):
+    name = models.CharField(max_length=100)
+    subject = models.CharField(max_length=100, blank=True, null=True)
+    teacher = models.ForeignKey(TeacherProfile, on_delete=models.CASCADE, related_name='classrooms')
+    students = models.ManyToManyField('StudentProfile', blank=True, related_name='classrooms')
+
+    def __str__(self):
+        return f"{self.name} - {self.teacher.teacher.email}"
+
+# Student Profile Model
 class StudentProfile(models.Model):
     student = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='student_profile')
-    assigned_class = models.ForeignKey(Classroom, on_delete=models.SET_NULL, null=True, blank=True)
-    
+
     def __str__(self):
-        return f"{self.student.email} - {self.assigned_class.name if self.assigned_class else 'No Class'}"
-# Assignments
+        return self.student.email
+
+# Assignment Model
 class Assignment(models.Model):
     title = models.CharField(max_length=255)
     description = models.TextField(default="No description provided.")
-    due_date = models.DateTimeField()  # Ensure this field is present
-    keywords = models.TextField(blank=True, null=True)  # Ensure this field is present
+    due_date = models.DateTimeField()
+    keywords = models.TextField(blank=True, null=True)
+
     teacher = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='assignments')
-    assigned_class = models.ForeignKey(Classroom, on_delete=models.CASCADE, related_name='assignments', null=True, blank=True, default=None)
+    assigned_class = models.ForeignKey(Classroom, on_delete=models.CASCADE, related_name='assignments', null=True, blank=True)
 
     def __str__(self):
-        return self.title
+        return f"{self.title} ({self.assigned_class.name if self.assigned_class else 'No Class'})"
 
-# Assignment Submission
+# Submission Model
 class Submission(models.Model):
-    student = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='submissions')
+    student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='submissions')
     assignment = models.ForeignKey(Assignment, on_delete=models.CASCADE, related_name='submissions')
     file = models.FileField(upload_to='submissions/')
     submitted_at = models.DateTimeField(default=timezone.now)
@@ -100,7 +99,7 @@ class Submission(models.Model):
     grade = models.CharField(max_length=2, blank=True, null=True)
     feedback = models.TextField(blank=True, null=True)
     comments = models.TextField(blank=True, null=True)
-    
+
     def calculate_plagiarism(self, other_submissions):
         highest_score = 0.0
         for other in other_submissions:
@@ -108,27 +107,28 @@ class Submission(models.Model):
             highest_score = max(highest_score, similarity)
         self.plagiarism_score = round(highest_score * 100, 2)
         self.save()
-    
-    def __str__(self):
-        return f"{self.student.username} - {self.assignment.title}"
 
-# Performance Tracking
+    def __str__(self):
+        return f"{self.student.student.email} - {self.assignment.title}"
+
+# Performance Model
 class Performance(models.Model):
-    student = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='performance')
+    student = models.OneToOneField(StudentProfile, on_delete=models.CASCADE, related_name='performance')
     average_score = models.FloatField(default=0.0)
     completed_assignments = models.IntegerField(default=0)
-    
+
     def update_performance(self):
-        submissions = Submission.objects.filter(student=self.student, graded=True)
+        submissions = Submission.objects.filter(student=self.student, grade__isnull=False)
         if submissions.exists():
             grades = [float(sub.grade) for sub in submissions if sub.grade is not None]
             if grades:
                 self.average_score = sum(grades) / len(grades)
             self.completed_assignments = submissions.count()
         self.save()
-    
+
     def __str__(self):
-        return f"{self.student.username} - {self.average_score}"
+        return f"{self.student.student.email} - Avg: {self.average_score}"
+
 
 # Query Model for student queries
 class Query(models.Model):
