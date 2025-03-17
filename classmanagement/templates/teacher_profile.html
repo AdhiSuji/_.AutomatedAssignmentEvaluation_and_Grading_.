@@ -1,74 +1,137 @@
-{% extends "base.html" %}
-
+{% extends 'base.html' %}
+{% load static %} 
 {% block title %}Teacher Profile{% endblock %}
 
 {% block content %}
-<div class="container mt-5">
-    <h2 class="text-center mb-4">Teacher Profile</h2>
+<div class="container position-relative">
 
-    <p><strong>Welcome, {{ user.first_name }}!</strong></p>
-    <p><strong>Your Reference ID:</strong> {{ user.reference_id }}</p>
+    <!-- ✅ Teacher Profile Card -->
+    <div class="card position-absolute p-3" style="top: 20px; right: 20px; width: 250px;">
+        <div class="text-center">
+            {% if teacher.profile_pic %}
+                <img src="{{ teacher.profile_pic.url }}" class="rounded-circle mb-2" width="80" height="80" style="object-fit: cover;">
+            {% else %}
+            <img src="{% static 'media/default_folder/default_teacher.jpg' %}" class="rounded-circle mb-2" width="80" height="80" style="object-fit: cover;">
+            {% endif %}
+            <h5 class="mb-0">{{ request.user.username }}</h5>
+        </div>
 
-    <!-- ➕ Create Class Button -->
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h3>Your Classes</h3>
-        <a href="{% url 'create_class' %}" class="btn btn-success">+ Create Class</a>
+        <!-- ✅ Update Profile Picture Form -->
+        <form method="POST" enctype="multipart/form-data" class="mt-3">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <button type="submit" class="btn btn-sm btn-primary w-100">Save</button>
+        </form>
     </div>
 
-    <!-- 🏫 Display Created Classes and Students -->
-    {% if classes %}
-        <div class="accordion" id="classesAccordion">
-            {% for class_obj in classes %}
-                <div class="accordion-item mb-3">
-                    <h2 class="accordion-header" id="heading{{ forloop.counter }}">
-                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ forloop.counter }}" aria-expanded="false" aria-controls="collapse{{ forloop.counter }}">
-                            {{ class_obj.name }}
+    <!-- ✅ Welcome Section -->
+    <h2 class="mt-5">Welcome, {{ teacher.user.first_name }}!</h2>
+    <button class="btn btn-success mt-3" data-bs-toggle="modal" data-bs-target="#createClassModal">Create New Class</button>
+
+    <!-- ✅ List of Created Classes -->
+    <h3 class="mt-4">Your Classes</h3>
+    {% if teacher_classes %}
+        <div class="accordion" id="teacherClassesAccordion">
+            {% for classroom in teacher_classes %}
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="teacherHeading{{ forloop.counter }}">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#teacherCollapse{{ forloop.counter }}">
+                            {{ classroom.name }}
                         </button>
                     </h2>
-                    <div id="collapse{{ forloop.counter }}" class="accordion-collapse collapse" aria-labelledby="heading{{ forloop.counter }}" data-bs-parent="#classesAccordion">
+                    <div id="teacherCollapse{{ forloop.counter }}" class="accordion-collapse collapse">
                         <div class="accordion-body">
-                            <!-- Class Actions -->
-                            <div class="mb-3">
-                                <a href="{% url 'give_assignment' class_obj.id %}" class="btn btn-primary btn-sm me-1">Assign Task</a>
-                                <a href="{% url 'teacher_dashboard' class_obj.id %}" class="btn btn-info btn-sm me-1">View Dashboard</a>
-                                <a href="{% url 'given_assignment' class_obj.id %}" class="btn btn-warning btn-sm me-1">View Tasks</a>
-                                <form action="{% url 'delete_class' class_obj.id %}" method="POST" class="d-inline">
-                                    {% csrf_token %}
-                                    <button type="submit" class="btn btn-danger btn-sm">Delete Class</button>
-                                </form>
-                            </div>
-
-                            <!-- 👨‍🎓 List Students Enrolled in the Class -->
-                            <h5 class="mt-3">Enrolled Students</h5>
-                            {% if class_obj.students.all %}
-                                <table class="table table-striped">
-                                    <thead>
-                                        <tr>
-                                            <th>Student Name</th>
-                                            <th>Email</th>
-                                            <th>Enrolled On</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for student in class_obj.students.all %}
-                                            <tr>
-                                                <td>{{ student.get_full_name }}</td>
-                                                <td>{{ student.email }}</td>
-                                                <td>{{ student.enrollment_date|date:"F j, Y" }}</td>
-                                            </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
+                            <h5>Students:</h5>
+                            {% if classroom.students.all %}
+                                <ul>
+                                    {% for student in classroom.students.all %}
+                                        <li>{{ student.get_full_name }} ({{ student.email }})</li>
+                                    {% endfor %}
+                                </ul>
                             {% else %}
-                                <p class="text-muted">No students enrolled in this class yet.</p>
+                                <p class="text-danger">No students enrolled yet.</p>
                             {% endif %}
+
+                            <h5 class="mt-3">Assignments:</h5>
+                            {% if classroom.assignments.all %}
+                                <ul>
+                                    {% for assignment in classroom.assignments.all %}
+                                        <li>
+                                            <strong>{{ assignment.title }}</strong> - Due: {{ assignment.due_date }}
+                                            <a href="{% url 'view_submissions' assignment.id %}" class="btn btn-info btn-sm ms-2">Submissions</a>
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            {% else %}
+                                <p class="text-warning">No assignments created yet.</p>
+                            {% endif %}
+
+                            <a href="{% url 'create_assignment' classroom.id %}" class="btn btn-primary mt-3">Create New Assignment</a>
                         </div>
                     </div>
                 </div>
             {% endfor %}
         </div>
     {% else %}
-        <p class="alert alert-warning">You haven't created any classes yet. Click "Create Class" to get started!</p>
+        <p class="text-danger">You haven't created any classes yet. Start now!</p>
     {% endif %}
 </div>
+
+<!-- ✅ Modal for Creating Class -->
+<div class="modal fade" id="createClassModal" tabindex="-1" aria-labelledby="createClassModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Create a Class</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form method="POST" action="{% url 'teacher_create_class' %}">
+                    {% csrf_token %}
+                    <label for="class_name">Class Name:</label>
+                    <input type="text" name="class_name" id="class_name" class="form-control" required>
+
+                    <label for="class_description" class="mt-2">Description:</label>
+                    <textarea name="class_description" id="class_description" class="form-control" rows="3"></textarea>
+
+                    <button type="submit" class="btn btn-primary mt-3">Create Class</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<form method="GET" class="d-flex mb-3">
+    <input type="text" name="q" value="{{ query }}" placeholder="Search students..." class="form-control me-2">
+    <button type="submit" class="btn btn-primary">Search</button>
+</form>
+
+<ul class="list-group">
+    {% for student in page_obj %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+            {{ student.student.get_full_name }} ({{ student.student.username }})
+        </li>
+    {% empty %}
+        <li class="list-group-item">No students found.</li>
+    {% endfor %}
+</ul>
+
+<nav>
+    <ul class="pagination justify-content-center mt-3">
+        {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?q={{ query }}&page={{ page_obj.previous_page_number }}">Previous</a>
+            </li>
+        {% endif %}
+        <li class="page-item active">
+            <span class="page-link">{{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+        </li>
+        {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?q={{ query }}&page={{ page_obj.next_page_number }}">Next</a>
+            </li>
+        {% endif %}
+    </ul>
+</nav>
+
 {% endblock %}

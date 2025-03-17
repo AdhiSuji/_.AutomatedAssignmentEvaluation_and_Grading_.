@@ -1,6 +1,6 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
-from .models import CustomUser, Assignment, Submission, Query, Classroom, StudentProfile
+from .models import CustomUser, Assignment, Submission, Query, Classroom, StudentProfile, TeacherProfile
 
 # ---------------------------------------------------
 # ✅ User Registration Form (For Teachers & Students)
@@ -201,3 +201,20 @@ class EnrollmentForm(forms.Form):
 
         student_profile.assigned_classes.add(selected_class)
         return student_profile
+
+class ClassForm(forms.ModelForm):
+    class Meta:
+        model = Classroom
+        fields = ['name', 'subject']
+
+class TeacherProfileForm(forms.ModelForm):
+    class Meta:
+        model = TeacherProfile
+        fields = ['profile_pic', 'bio']
+
+class StudentProfileForm(forms.ModelForm):
+    class Meta:
+        model = StudentProfile
+        fields = ['profile_pic', 'bio']
+
+

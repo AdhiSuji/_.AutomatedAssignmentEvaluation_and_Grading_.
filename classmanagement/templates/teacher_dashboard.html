@@ -1,8 +1,20 @@
 {% extends "base.html" %}
 {% block title %}Teacher Dashboard{% endblock %}
 {% block content %}
+
 <div class="container">
-    <h2 class="text-center">Teacher Dashboard</h2>
+
+    <!-- Profile & Logout Buttons -->
+    <div class="d-flex justify-content-end mt-3">
+        <a href="{% url 'teacher_profile' %}" class="btn btn-primary me-2">
+            <i class="fas fa-user"></i> Profile
+        </a>
+        <a href="{% url 'logout' %}" class="btn btn-danger">
+            <i class="fas fa-sign-out-alt"></i> Logout
+        </a>
+    </div>
+
+    <h2 class="text-center mt-4">Teacher Dashboard</h2>
 
     <!-- Top 3 Best Performers -->
     <h3 class="mt-4">Top 3 Best Performers</h3>
@@ -47,5 +59,7 @@
             {% endfor %}
         </tbody>
     </table>
+
 </div>
+
 {% endblock %}

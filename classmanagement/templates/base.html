@@ -1,13 +1,15 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Assignment System{% endblock %}</title>
+    <link rel="icon" type="image/png" href="{% static 'images/logo1.jpg' %}">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
-            background: linear-gradient(to right,rgb(36, 0, 74),rgb(156, 23, 127));
+            background: linear-gradient(to right, rgb(36, 0, 74), rgb(156, 23, 127));
             color: white;
         }
         .container {
@@ -23,13 +25,51 @@
         .navbar {
             background: rgba(250, 247, 247, 0.8);
         }
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            color: black !important;
+            font-weight: bold;
+        }
+        .navbar-brand img {
+            height: 40px;
+            width: 40px;
+            margin-right: 10px;
+            border-radius: 50%;
+        }
     </style>
 </head>
 <body>
 
 <nav class="navbar navbar-expand-lg navbar-dark">
     <div class="container">
-        <a class="navbar-brand" href="#">Assignment System</a>
+        <a class="navbar-brand" href="#">
+            <img src="{% static 'image/logo1.jpg' %}" alt="Logo">
+            SUBMITECH
+        </a>
+        <div class="d-flex align-items-center ms-auto">
+                    {% if user.is_authenticated %}
+                        {% if user.is_staff %}
+                            <a href="{% url 'teacher_profile' %}" class="d-flex align-items-center">
+                                <img src="{{ user.teacherprofile.profile_pic.url }}" 
+                                     alt="Profile" 
+                                     class="rounded-circle" 
+                                     width="40" height="40" 
+                                     style="object-fit: cover;">
+                                <span class="ms-2">{{ user.username }}</span>
+                            </a>
+                        {% else %}
+                            <a href="{% url 'student_profile' %}" class="d-flex align-items-center">
+                                <img src="{{ user.studentprofile.profile_pic.url }}" 
+                                     alt="Profile" 
+                                     class="rounded-circle" 
+                                     width="40" height="40" 
+                                     style="object-fit: cover;">
+                                <span class="ms-2">{{ user.username }}</span>
+                            </a>
+                        {% endif %}
+                    {% endif %}
+                </div>
     </div>
 </nav>
 
