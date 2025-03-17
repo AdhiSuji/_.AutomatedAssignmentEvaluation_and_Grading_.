@@ -144,10 +144,10 @@ def user_logout(request):
     return redirect('login')
 
 def student_default_profile():
-    return 'default_folder/default_student.png'  # path inside media folder
+    return 'default_folder/default_student.jpg'  # path inside media folder
 
 def teacher_default_profile():
-    return 'default_folder/default_teacher.png'  # path inside media folder
+    return 'default_folder/default_teacher.jpg'  # path inside media folder
 
 # ✅ Teacher Profile View
 @login_required
@@ -444,38 +444,37 @@ def delete_class(request, class_id):
 
     return redirect("teacher_dashboard")
 
-
 @login_required
 @user_passes_test(is_teacher)
-def give_assignment(request):
+def give_assignment(request, class_id):
+    teacher_profile = get_object_or_404(TeacherProfile, teacher=request.user)
+
+    classroom = get_object_or_404(Classroom, id=class_id)
+
     if request.method == "POST":
         form = AssignmentForm(request.POST)
         if form.is_valid():
             assignment = form.save(commit=False)
-            assignment.teacher = request.user
+            assignment.teacher = teacher_profile  # ✅ Now it's the correct object type
+            assignment.assigned_class = classroom  # ✅ Assign class based on class_id
             assignment.save()
             messages.success(request, "Assignment given successfully!")
-            return redirect('teacher_dashboard')
-
+            return redirect('teacher_dashboard', class_id=class_id)
     else:
         form = AssignmentForm()
-    
-    query = request.GET.get('q')
-    given_assignments = Assignment.objects.filter(teacher=teacher_profile)
 
-    if query:
-        given_assignments = given_assignments.filter(
-            Q(title__icontains=query) |
-            Q(assigned_class__classname__icontains=query)
-        )
+    # Optional: fetch existing assignments for the class
+    given_assignments = Assignment.objects.filter(teacher=teacher_profile)
 
     paginator = Paginator(given_assignments, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
     return render(request, 'give_assignment.html', {
-        'page_obj': page_obj,
-        'query': query,})
+        'form': form,
+        'page_obj': page_obj
+    })
+
 
 @login_required
 def given_assignment(request, class_id):

@@ -56,7 +56,7 @@ class CustomUser(AbstractUser):
 class TeacherProfile(models.Model):
     teacher = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='teacher_profile', primary_key=True)
     reference_id = models.CharField(max_length=20, unique=True , null=True, blank=True)
-    profile_pic = models.ImageField(upload_to='teacher_profiles/', default='default_teacher.jpg')
+    profile_pic = models.ImageField(upload_to='teacher_profiles/', default='default_folder/default_teacher.jpg')
     bio = models.TextField(blank=True, null=True)
 
     def save(self, *args, **kwargs):
@@ -70,7 +70,7 @@ class TeacherProfile(models.Model):
 
 class StudentProfile(models.Model):
     student = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='student_profile', primary_key=True)
-    profile_pic = models.ImageField(upload_to='student_profiles/', default='default_student.jpg')
+    profile_pic = models.ImageField(upload_to='student_profiles/', default='default_folder/default_student.jpg')
     bio = models.TextField(blank=True, null=True)
     name = models.CharField(max_length=100)
     assigned_classes = models.ManyToManyField('Classroom', related_name='assigned_students')

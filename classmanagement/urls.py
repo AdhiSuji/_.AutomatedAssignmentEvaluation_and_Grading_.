@@ -20,7 +20,7 @@ urlpatterns = [
     path('assignments/give/<int:class_id>/', views.give_assignment, name='give_assignment'),
     path("assignments/given/<int:class_id>/", views.given_assignment, name="given_assignment"),
     path('assignments/submit/submit/<int:assignment_id>/', views.submit_assignment, name='submit_assignment'),
-    path('assignments/view/', views.view_submissions, name='view_submissions'),
+    path('assignments/view/<int:assignment_id>/', views.view_submissions, name='view_submissions'),
     path('assignments/grade/', views.grade_assignment, name='grade_assignment'),
 
     # Performance & Queries
