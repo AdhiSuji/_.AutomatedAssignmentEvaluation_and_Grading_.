@@ -55,12 +55,18 @@ class CustomUser(AbstractUser):
 
 class TeacherProfile(models.Model):
     teacher = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='teacher_profile', primary_key=True)
-    teacher_ref_id = models.CharField(max_length=20, unique=True , null=True, blank=True)
+    reference_id = models.CharField(max_length=20, unique=True , null=True, blank=True)
     profile_pic = models.ImageField(upload_to='teacher_profiles/', default='default_teacher.jpg')
     bio = models.TextField(blank=True, null=True)
 
+    def save(self, *args, **kwargs):
+        if not self.reference_id:
+            # You can make this whatever format you want
+            self.reference_id = f"TEACH-{str(uuid.uuid4())[:8].upper()}"  # Example: TEACH-8F3A1B2C
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f"{self.teacher.first_name}-{self.teacher_reference_id}" if self.teacher else "No Teacher"
+        return f"{self.teacher.first_name}-{self.reference_id}" if self.teacher else "No Teacher"
 
 class StudentProfile(models.Model):
     student = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='student_profile', primary_key=True)

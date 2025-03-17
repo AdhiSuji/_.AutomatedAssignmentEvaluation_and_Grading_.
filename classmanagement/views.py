@@ -106,7 +106,7 @@ def user_login(request):
                 Performance.objects.create(student=student_profile)
 
             # ✅ FIX: Access classrooms instead of assigned_class
-            assigned_classes = student_profile.classrooms.all()
+            assigned_classes = student_profile.assigned_classes.all()
 
             if assigned_classes.exists():
                 first_class = assigned_classes.first()  # Grab the first class
@@ -144,10 +144,10 @@ def user_logout(request):
     return redirect('login')
 
 def student_default_profile():
-    return 'default_profiles/default_student.png'  # path inside media folder
+    return 'default_folder/default_student.png'  # path inside media folder
 
 def teacher_default_profile():
-    return 'default_profiles/default_teacher.png'  # path inside media folder
+    return 'default_folder/default_teacher.png'  # path inside media folder
 
 # ✅ Teacher Profile View
 @login_required
@@ -185,6 +185,9 @@ def teacher_profile(request):
     })
 
 
+
+
+
 # ✅ Student Profile View
 @login_required
 @user_passes_test(is_student)
@@ -198,7 +201,7 @@ def student_profile(request):
         messages.info(request, "Welcome! Please join a class to get started.")
 
     # Get all classrooms this student has joined
-    assigned_classes = student_profile.assigned_class.all()
+    assigned_classes = student_profile.assigned_classes.all()
 
     if not assigned_classes.exists():
         messages.warning(request, "You are not enrolled in any classes yet.")
@@ -219,7 +222,8 @@ def student_profile(request):
         'assignments': assignments,
         'teachers': teachers,
         'performance': performance,
-    })          
+    })    
+
 
 @login_required
 @user_passes_test(is_teacher)
@@ -241,8 +245,8 @@ def teacher_dashboard(request, class_id):
 
     query = request.GET.get('q')
 
-    # ✅ FIXED: students now filtered by reverse relation 'classrooms'
-    students = StudentProfile.objects.filter(classrooms__in=classes).distinct()
+    # ✅ FIX: Use assigned_classes here
+    students = StudentProfile.objects.filter(assigned_classes__in=classes).distinct()
 
     if query:
         students = students.filter(
@@ -254,11 +258,10 @@ def teacher_dashboard(request, class_id):
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    # ✅ FIXED: queries filtered by reverse relation
-    queries = Query.objects.filter(student__classrooms=classroom).filter(answer__isnull=False).exclude(answer="")
+    # ✅ FIX: Use assigned_classes for classroom filtering
+    queries = Query.objects.filter(student__assigned_classes=classroom).filter(answer__isnull=False).exclude(answer="")
 
-    # ✅ FIXED: top_students filtered by reverse relation
-    top_students = Performance.objects.filter(student__classrooms=classroom).order_by('-average_score')[:3]
+    top_students = Performance.objects.filter(student__assigned_classes=classroom).order_by('-average_score')[:3]
 
     return render(request, 'teacher_dashboard.html', {
         'classes': classes,
