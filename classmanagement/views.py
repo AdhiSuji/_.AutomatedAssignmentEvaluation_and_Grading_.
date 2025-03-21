@@ -8,7 +8,7 @@ from django.http import JsonResponse
 from django.db.models import Q
 from django.core.paginator import Paginator
 from .models import (CustomUser, Classroom, Assignment, Submission,Performance, Query, StudentProfile, TeacherProfile)
-from .forms import (UserRegistrationForm, AssignmentForm, SubmissionForm,LoginForm, QueryForm, QueryResponseForm, ClassForm)
+from .forms import (UserRegistrationForm, AssignmentForm, SubmissionForm,LoginForm, QueryForm, QueryResponseForm, ClassForm,StudentProfileForm)
 from PyPDF2 import PdfReader
 from docx import Document
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -106,10 +106,10 @@ def user_login(request):
                 Performance.objects.create(student=student_profile)
 
             # ✅ FIX: Access classrooms instead of assigned_class
-            assigned_classes = student_profile.assigned_classes.all()
+            joined_classes = student_profile.joined_classes.all()
 
-            if assigned_classes.exists():
-                first_class = assigned_classes.first()  # Grab the first class
+            if joined_classes.exists():
+                first_class = joined_classes.first()  # Grab the first class
                 return redirect("student_dashboard", class_id=first_class.id)
             else:
                 messages.warning(request, "No class assigned! Contact your teacher.")
@@ -186,44 +186,38 @@ def teacher_profile(request):
 
 
 
-
-
 # ✅ Student Profile View
 @login_required
 @user_passes_test(is_student)
 def student_profile(request):
     student_user = request.user
-
-    # Fetch or create the StudentProfile for this user
     student_profile, created = StudentProfile.objects.get_or_create(student=student_user)
 
-    if created:
-        messages.info(request, "Welcome! Please join a class to get started.")
+    # Load the form with the existing instance
+    form = StudentProfileForm(request.POST or None, request.FILES or None, instance=student_profile)
 
-    # Get all classrooms this student has joined
-    assigned_classes = student_profile.assigned_classes.all()
+    if request.method == 'POST':  # Handle form submission
+        form = StudentProfileForm(request.POST, request.FILES, instance=student_profile)
+        if form.is_valid():
+            form.save()  # Save profile picture and other details
+            messages.success(request, "Profile updated successfully!")
+            return redirect('student_profile')  # Redirect to avoid re-submission on refresh
 
-    if not assigned_classes.exists():
-        messages.warning(request, "You are not enrolled in any classes yet.")
-
-    # Fetch assignments related to the classes (optional filter for active assignments)
-    assignments = Assignment.objects.filter(assigned_class__in=assigned_classes)
-
-    # Get distinct teachers for the assigned classes
-    teachers = TeacherProfile.objects.filter(classrooms__in=assigned_classes).distinct()
-
-    # Get or create the performance record for the student
+    joined_classes = student_profile.joined_classes.all()
+    assignments = Assignment.objects.filter(assigned_class__in=joined_classes)
+    teachers = TeacherProfile.objects.filter(classrooms__in=joined_classes).distinct()
     performance, _ = Performance.objects.get_or_create(student=student_profile)
 
-    # Render the student profile page
-    return render(request, 'student_profile.html', {
+    context = {
         'student_profile': student_profile,
-        'assigned_classes': assigned_classes,
+        'assigned_classes': joined_classes,
         'assignments': assignments,
         'teachers': teachers,
         'performance': performance,
-    })    
+        'form': form  # Pass the form to the template
+    }
 
+    return render(request, 'student_profile.html', context)
 
 @login_required
 @user_passes_test(is_teacher)
@@ -368,23 +362,26 @@ def enroll_student(request):
         class_id = request.POST.get("selected_class")
 
         try:
-            teacher = CustomUser.objects.get(reference_id=reference_id, role='teacher')
+            teacher = TeacherProfile.objects.get(reference_id=reference_id)
             selected_class = Classroom.objects.get(id=class_id, teacher=teacher)
 
             student_profile = get_object_or_404(StudentProfile, student=request.user)
-            student_profile.assigned_class = selected_class
-            student_profile.save()
 
-            messages.success(request, "Successfully enrolled in class.")
-            return redirect('student_dashboard', class_id=selected_class.id)
+            if selected_class in student_profile.assigned_classes.all():
+                messages.warning(request, "You are already enrolled in this class.")
+            else:
+                student_profile.assigned_classes.add(selected_class)
+                messages.success(request, "Successfully enrolled in class.")
 
-        except CustomUser.DoesNotExist:
+            return redirect('student_dashboard')
+
+        except TeacherProfile.DoesNotExist:
             messages.error(request, "Invalid Teacher Reference ID.")
         except Classroom.DoesNotExist:
             messages.error(request, "Invalid Class Selection.")
 
-    classes = Classroom.objects.all()
-    return render(request, 'enroll_student.html', {'classes': classes})
+    # Classes are fetched dynamically via get_teacher_classes(), so no need to pass all classes
+    return render(request, 'enroll_student.html')
 
 def teacher_list(request):
     teachers = CustomUser.objects.filter(role="teacher")
@@ -419,8 +416,8 @@ def get_teacher_classes(request):
         return JsonResponse({'error': 'No reference ID provided'}, status=400)
 
     try:
-        teacher = get_object_or_404(teacher, reference_id=reference_id)
-        classes = Classroom.objects.filter(teachers=teacher)
+        teacher = get_object_or_404(TeacherProfile, reference_id=reference_id)
+        classes = Classroom.objects.filter(teacher=teacher)
 
         class_list = [
             {'id': cls.id, 'name': cls.name}
@@ -428,10 +425,46 @@ def get_teacher_classes(request):
         ]
 
         return JsonResponse({'classes': class_list})
-    
-    except teacher.DoesNotExist:
+
+    except TeacherProfile.DoesNotExist:
         return JsonResponse({'classes': []})
-    
+   
+@login_required
+def join_class(request):
+    print('User:', request.user)
+    print('Is authenticated:', request.user.is_authenticated)
+
+    if not request.user.is_authenticated:
+        messages.error(request, 'You are not logged in.')
+        return redirect('login')
+
+    if request.method == 'POST':
+        teacher_reference_id = request.POST.get('teacher_reference_id')
+        assigned_class_id = request.POST.get('assigned_class')
+
+        try:
+            teacher = TeacherProfile.objects.get(reference_id=teacher_reference_id)
+            classroom = Classroom.objects.get(id=assigned_class_id)
+
+            student_profile, created = StudentProfile.objects.get_or_create(user=request.user)
+
+            if classroom in student_profile.joined_classes.all():
+                messages.warning(request, 'You have already joined this class.')
+                return redirect('student_profile')
+
+            student_profile.joined_classes.add(classroom)
+            student_profile.save()
+
+            messages.success(request, 'You have successfully joined the class!')
+            return redirect('student_profile')
+
+        except TeacherProfile.DoesNotExist:
+            messages.error(request, 'Teacher not found.')
+        except Classroom.DoesNotExist:
+            messages.error(request, 'Class not found.')
+
+    return redirect('student_profile')
+
 
 @login_required
 @user_passes_test(is_teacher)

@@ -1,5 +1,9 @@
 ﻿from django.conf import settings
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 from django.db import models
+from django.db import models
+from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AbstractUser,  BaseUserManager, User
 from django.utils import timezone
 from difflib import SequenceMatcher
@@ -53,40 +57,48 @@ class CustomUser(AbstractUser):
     def __str__(self):
         return self.email
 
+
+CustomUser = get_user_model()
+
+# Teacher Profile
 class TeacherProfile(models.Model):
     teacher = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='teacher_profile', primary_key=True)
-    reference_id = models.CharField(max_length=20, unique=True , null=True, blank=True)
+    reference_id = models.CharField(max_length=20, unique=True, null=True, blank=True, editable=False)
     profile_pic = models.ImageField(upload_to='teacher_profiles/', default='default_folder/default_teacher.jpg')
     bio = models.TextField(blank=True, null=True)
 
     def save(self, *args, **kwargs):
-        if not self.reference_id:
-            # You can make this whatever format you want
-            self.reference_id = f"TEACH-{str(uuid.uuid4())[:8].upper()}"  # Example: TEACH-8F3A1B2C
+        if self.teacher and not self.reference_id:
+            # Generate unique reference ID if not set
+            self.reference_id = f"REF-{self.teacher.id:04d}"
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.teacher.first_name}-{self.reference_id}" if self.teacher else "No Teacher"
+        return f"{self.teacher.first_name} ({self.reference_id})"
 
+
+# Classroom Model
+class Classroom(models.Model):
+    teacher = models.ForeignKey(TeacherProfile, on_delete=models.CASCADE, related_name='classrooms')
+    name = models.CharField(max_length=100)
+    subject = models.CharField(max_length=100, null=False, default="General") 
+    description = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.name} - {self.teacher.teacher.first_name}"
+
+
+# Student Profile
 class StudentProfile(models.Model):
     student = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='student_profile', primary_key=True)
-    profile_pic = models.ImageField(upload_to='student_profiles/', default='default_folder/default_student.jpg')
+    profile_pic = models.ImageField(upload_to='profile_pics/', default='default_folder/default_student.jpg')
     bio = models.TextField(blank=True, null=True)
     name = models.CharField(max_length=100)
-    assigned_classes = models.ManyToManyField('Classroom', related_name='assigned_students')
-
+    joined_classes = models.ManyToManyField(Classroom, related_name='students_joined')
+    
     def __str__(self):
         return self.student.email
-
-
-class Classroom(models.Model):
-    name = models.CharField(max_length=100)
-    subject = models.CharField(max_length=100, blank=True, null=True)
-    teacher = models.ForeignKey(TeacherProfile, on_delete=models.CASCADE, related_name='classrooms')
-
-    def __str__(self):
-        return f"{self.name} - {self.teacher.teacher.email}"
-
 
 # Assignment Model
 class Assignment(models.Model):

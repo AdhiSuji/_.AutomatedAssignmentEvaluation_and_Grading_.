@@ -1,111 +1,178 @@
 {% extends 'base.html' %}
 {% load static %}
+
 {% block title %}Student Profile{% endblock %}
 
 {% block content %}
-<div class="container position-relative">
 
-    <!-- ✅ Student Profile Card -->
-    <div class="card position-absolute p-3" style="top: 20px; right: 20px; width: 250px;">
-        <div class="text-center">
-            {% if profile.profile_pic %}
-                <img src="{{ profile.profile_pic.url }}" class="rounded-circle mb-2" width="80" height="80" style="object-fit: cover;">
-            {% else %}
-                <img src="{% static 'media/default_folder/default_student.jpg' %}" class="rounded-circle mb-2" width="80" height="80" style="object-fit: cover;">
-            {% endif %}
-            <h5 class="mb-0">{{ request.user.username }}</h5>
+<div class="container py-5">
+
+    <!-- Page Heading -->
+    <div class="row mb-4">
+        <div class="col-lg-12 d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="fw-bold">Welcome, {{ user.first_name }}!</h2>
+                <p class="text-muted">Manage your classes, assignments, and profile here.</p>
+            </div>
+            <div>
+                <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addTeacherModal">
+                    + Join New Class
+                </button>
+            </div>
         </div>
-
-        <!-- ✅ Update Profile Picture Form -->
-        <form method="POST" enctype="multipart/form-data" class="mt-3">
-            {% csrf_token %}
-            {{ form.as_p }}
-            <button type="submit" class="btn btn-sm btn-primary w-100">Save</button>
-        </form>
     </div>
 
-    <!-- ✅ Welcome Section -->
-    <h2 class="mt-5">Welcome, {{ user.first_name }}!</h2>
-    <button class="btn btn-success mt-3" data-bs-toggle="modal" data-bs-target="#addTeacherModal">Join New Class</button>
+    <div class="row">
 
-    <!-- ✅ List of Joined Classes -->
-    <h3 class="mt-4">Your Classes</h3>
-    {% if joined_classes %}
-        <div class="accordion" id="classesAccordion">
-            {% for classroom in joined_classes %}
-                <div class="accordion-item">
-                    <h2 class="accordion-header" id="heading{{ forloop.counter }}">
-                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ forloop.counter }}">
-                            {{ classroom.name }}
-                        </button>
-                    </h2>
-                    <div id="collapse{{ forloop.counter }}" class="accordion-collapse collapse">
-                        <div class="accordion-body">
-                            <h5>Teacher(s):</h5>
-                            {% if classroom.teachers.all %}
-                                <ul>
-                                    {% for teacher in classroom.teachers.all %}
-                                        <li>{{ teacher.get_full_name }} ({{ teacher.email }})</li>
-                                    {% endfor %}
-                                </ul>
-                            {% else %}
-                                <p class="text-danger">No teachers found for this class.</p>
-                            {% endif %}
+        <!-- Profile Sidebar -->
+        <div class="col-md-4 mb-4">
+            <div class="card shadow-sm rounded-4 border-0">
+                <div class="card-body text-center p-4">
 
-                            <h5 class="mt-3">Assignments:</h5>
-                            {% if classroom.assignments.all %}
-                                <ul>
-                                    {% for assignment in classroom.assignments.all %}
-                                        <li>
-                                            <strong>{{ assignment.title }}</strong> - Due: {{ assignment.due_date }}
-                                            <a href="{% url 'submit_assignment' assignment.id %}" class="btn btn-success btn-sm ms-2">Submit</a>
-                                        </li>
-                                    {% endfor %}
-                                </ul>
-                            {% else %}
-                                <p class="text-warning">No assignments yet for this class.</p>
-                            {% endif %}
-
-                            <a href="{% url 'student_dashboard' classroom.id %}" class="btn btn-primary mt-3">Go to {{ classroom.name }} Dashboard</a>
-                        </div>
+                    <!-- Profile Picture -->
+                    <div class="mb-3">
+                        {% if profile.profile_pic %}
+                            <img src="{{ profile.profile_pic.url }}" class="rounded-circle img-thumbnail" style="width: 120px; height: 120px; object-fit: cover;" alt="Profile Pic">
+                        {% else %}
+                            <img src="{% static 'media/default_folder/default_student.jpg' %}" class="rounded-circle img-thumbnail" style="width: 120px; height: 120px; object-fit: cover;" alt="Default Pic">
+                        {% endif %}
                     </div>
+
+                    <!-- User Name & Username -->
+                    <h5 class="fw-bold">{{ request.user.get_full_name|default:request.user.username }}</h5>
+                    <p class="text-muted">@{{ request.user.username }}</p>
+
+                    <!-- Update Profile Form -->
+                    <form method="POST" enctype="multipart/form-data" class="mt-3">
+                        {% csrf_token %}
+                        <div class="form-group mb-2">
+                            {{ form.profile_pic.label_tag }} {{ form.profile_pic }}
+                        </div>
+
+                        <div class="form-group mb-2">
+                            {{ form.bio.label_tag }} {{ form.bio }}
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100">
+                            Update Profile
+                        </button>
+                    </form>
+
                 </div>
-            {% endfor %}
+            </div>
         </div>
-    {% else %}
-        <p class="text-danger">You are not enrolled in any classes yet. Join one now!</p>
-    {% endif %}
+
+        <!-- Classes and Assignments -->
+        <div class="col-md-8">
+
+            <!-- Joined Classes Section -->
+            <div class="card shadow-sm rounded-4 border-0 mb-4">
+                <div class="card-body p-4">
+                    <h4 class="fw-semibold mb-4">Your Classes</h4>
+
+                    {% if joined_classes %}
+                        <div class="accordion accordion-flush" id="classesAccordion">
+
+                            {% for classroom in joined_classes %}
+                                <div class="accordion-item mb-3 border rounded-3">
+                                    <h2 class="accordion-header" id="heading{{ forloop.counter }}">
+                                        <button class="accordion-button collapsed fw-medium" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ forloop.counter }}">
+                                            {{ classroom.name }}
+                                        </button>
+                                    </h2>
+
+                                    <div id="collapse{{ forloop.counter }}" class="accordion-collapse collapse" data-bs-parent="#classesAccordion">
+                                        <div class="accordion-body">
+
+                                            <!-- Teachers List -->
+                                            <h6 class="fw-semibold">Teacher(s):</h6>
+                                            <ul class="list-group list-group-flush mb-3">
+                                                {% for teacher in classroom.teachers.all %}
+                                                    <li class="list-group-item small">
+                                                        {{ teacher.get_full_name }} <br>
+                                                        <small class="text-muted">{{ teacher.email }}</small>
+                                                    </li>
+                                                {% endfor %}
+                                            </ul>
+
+                                            <!-- Assignments List -->
+                                            <h6 class="fw-semibold">Assignments:</h6>
+                                            {% if classroom.assignments.all %}
+                                                <ul class="list-group list-group-flush">
+                                                    {% for assignment in classroom.assignments.all %}
+                                                        <li class="list-group-item d-flex justify-content-between align-items-center small">
+                                                            <div>
+                                                                <strong>{{ assignment.title }}</strong><br>
+                                                                <small class="text-muted">Due: {{ assignment.due_date }}</small>
+                                                            </div>
+                                                            <a href="{% url 'submit_assignment' assignment.id %}" class="btn btn-outline-success btn-sm">
+                                                                Submit
+                                                            </a>
+                                                        </li>
+                                                    {% endfor %}
+                                                </ul>
+                                            {% else %}
+                                                <p class="text-warning small">No assignments available yet.</p>
+                                            {% endif %}
+
+                                            <a href="{% url 'student_dashboard' classroom.id %}" class="btn btn-outline-primary btn-sm mt-3 w-100">
+                                                Go to {{ classroom.name }} Dashboard
+                                            </a>
+
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+
+                        </div>
+                    {% else %}
+                        <p class="text-danger">You are not enrolled in any classes yet. Join one now!</p>
+                    {% endif %}
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
 </div>
 
-<!-- ✅ Modal for Adding a Teacher/Class -->
+<!-- Modal to Join Class -->
 <div class="modal fade" id="addTeacherModal" tabindex="-1" aria-labelledby="addTeacherModalLabel" aria-hidden="true">
     <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Join a Class</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <div class="modal-content rounded-4 border-0">
+            <div class="modal-header bg-primary text-white rounded-top-4">
+                <h5 class="modal-title" id="addTeacherModalLabel">Join a Class</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body p-4">
                 <form method="POST" action="{% url 'add_teacher' %}">
                     {% csrf_token %}
-                    <label for="teacher_reference_id">Teacher Reference ID:</label>
-                    <input type="text" name="teacher_reference_id" id="teacher_reference_id" class="form-control" required>
+                    <div class="form-group mb-3">
+                        <label for="teacher_reference_id" class="form-label">Teacher Reference ID:</label>
+                        <input type="text" name="teacher_reference_id" id="teacher_reference_id" class="form-control" placeholder="Enter teacher's reference ID" required>
+                    </div>
 
-                    <label for="class_selection" class="mt-2">Select Class:</label>
-                    <select name="assigned_class" id="class_selection" class="form-control" disabled>
-                        <option value="">Enter Reference ID first</option>
-                    </select>
+                    <div class="form-group mb-3">
+                        <label for="class_selection" class="form-label">Select Class:</label>
+                        <select name="assigned_class" id="class_selection" class="form-select" disabled>
+                            <option value="">Enter Reference ID first</option>
+                        </select>
+                    </div>
 
-                    <button type="submit" class="btn btn-primary mt-3" id="addTeacherBtn" disabled>Join Class</button>
+                    <button type="submit" class="btn btn-primary w-100" id="addTeacherBtn" disabled>
+                        Join Class
+                    </button>
                 </form>
             </div>
         </div>
     </div>
 </div>
 
+<!-- Script for Dynamic Class Dropdown -->
 <script>
 document.getElementById("teacher_reference_id").addEventListener("input", function() {
-    let referenceID = this.value;
+    let referenceID = this.value.trim();
     let classDropdown = document.getElementById("class_selection");
     let addTeacherBtn = document.getElementById("addTeacherBtn");
 
@@ -114,6 +181,7 @@ document.getElementById("teacher_reference_id").addEventListener("input", functi
             .then(response => response.json())
             .then(data => {
                 classDropdown.innerHTML = '<option value="">Select a class</option>';
+
                 if (data.classes.length > 0) {
                     data.classes.forEach(cls => {
                         let option = document.createElement("option");
@@ -131,7 +199,7 @@ document.getElementById("teacher_reference_id").addEventListener("input", functi
             })
             .catch(error => {
                 console.error("Error fetching classes:", error);
-                classDropdown.innerHTML = '<option value="">Error fetching data</option>';
+                classDropdown.innerHTML = '<option value="">Error fetching classes</option>';
                 classDropdown.disabled = true;
                 addTeacherBtn.disabled = true;
             });

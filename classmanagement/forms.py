@@ -97,26 +97,34 @@ class ClassCreationForm(forms.ModelForm):
 # ---------------------------------------------------
 # ✅ Student Profile Form (Optional Profile Update)
 # ---------------------------------------------------
-class StudentProfileForm(forms.ModelForm):
+class StudentProfileForm(forms.Form):
     reference_id = forms.CharField(
-        required=False,
-        label="Enter Teacher Reference ID",
+        required=True,
+        label="Teacher Reference ID",
         widget=forms.TextInput(attrs={"placeholder": "Enter Teacher Reference ID"})
     )
 
     class_id = forms.ModelChoiceField(
         queryset=Classroom.objects.none(),
-        required=False,
+        required=True,
         label="Select Class"
     )
 
-    class Meta:
-        model = StudentProfile
-        fields = ["reference_id", "class_id"]
-
     def __init__(self, *args, **kwargs):
         super(StudentProfileForm, self).__init__(*args, **kwargs)
-        self.fields["class_id"].queryset = Classroom.objects.none()
+
+        # If reference_id exists in data (after user types it)
+        if 'reference_id' in self.data:
+            reference_id = self.data.get('reference_id')
+            try:
+                teacher = TeacherProfile.objects.get(reference_id=reference_id)
+                self.fields['class_id'].queryset = Classroom.objects.filter(teacher=teacher)
+            except TeacherProfile.DoesNotExist:
+                self.fields['class_id'].queryset = Classroom.objects.none()
+        else:
+            self.fields['class_id'].queryset = Classroom.objects.none()
+
+
 
 # ---------------------------------------------------
 # ✅ Assignment Creation Form (For Teachers)
@@ -173,9 +181,9 @@ class EnrollmentForm(forms.Form):
         if 'reference_id' in self.data:
             reference_id = self.data.get('reference_id')
             try:
-                teacher = CustomUser.objects.get(reference_id=reference_id, role='teacher')
+                teacher = TeacherProfile.objects.get(reference_id=reference_id)
                 self.fields['selected_class'].queryset = Classroom.objects.filter(teacher=teacher)
-            except CustomUser.DoesNotExist:
+            except TeacherProfile.DoesNotExist:
                 self.fields['selected_class'].queryset = Classroom.objects.none()
 
     def clean(self):
@@ -202,19 +210,31 @@ class EnrollmentForm(forms.Form):
         student_profile.assigned_classes.add(selected_class)
         return student_profile
 
+
 class ClassForm(forms.ModelForm):
     class Meta:
         model = Classroom
-        fields = ['name', 'subject']
+        fields = ['name', 'subject', 'description']
 
 class TeacherProfileForm(forms.ModelForm):
     class Meta:
         model = TeacherProfile
         fields = ['profile_pic', 'bio']
 
+
 class StudentProfileForm(forms.ModelForm):
     class Meta:
         model = StudentProfile
         fields = ['profile_pic', 'bio']
 
-
+        widgets = {
+            'profile_pic': forms.FileInput(attrs={
+                'class': 'form-control form-control-sm',
+                'style': 'font-size: 0.75rem;'
+            }),
+            'bio': forms.Textarea(attrs={
+                'class': 'form-control form-control-sm',
+                'rows': 2,
+                'style': 'font-size: 0.75rem; resize: none; max-width: 200px;'
+            }),
+        }

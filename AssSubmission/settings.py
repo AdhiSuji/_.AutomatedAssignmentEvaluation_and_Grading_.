@@ -148,4 +148,8 @@ INSTALLED_APPS += ['django_celery_results']
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR / 'media')
 
+LOGIN_URL = '/login/'  
 
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
