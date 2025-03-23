@@ -26,6 +26,12 @@ def is_teacher(user):
 def is_student(user):
     return user.is_authenticated and user.role == 'student'
 
+def profile_view(request):
+    profile = StudentProfile.objects.get(user=request.user)
+    print(profile.profile_pic)
+    print(profile.profile_pic.url)
+    
+    return render(request, 'profile.html', {'profile': profile})
 
  #VIEWS             
 
@@ -186,22 +192,20 @@ def teacher_profile(request):
 
 
 
-# ✅ Student Profile View
 @login_required
 @user_passes_test(is_student)
 def student_profile(request):
     student_user = request.user
     student_profile, created = StudentProfile.objects.get_or_create(student=student_user)
 
-    # Load the form with the existing instance
-    form = StudentProfileForm(request.POST or None, request.FILES or None, instance=student_profile)
-
-    if request.method == 'POST':  # Handle form submission
+    if request.method == 'POST':
         form = StudentProfileForm(request.POST, request.FILES, instance=student_profile)
         if form.is_valid():
-            form.save()  # Save profile picture and other details
+            form.save()
             messages.success(request, "Profile updated successfully!")
-            return redirect('student_profile')  # Redirect to avoid re-submission on refresh
+            return redirect('student_profile')
+    else:
+        form = StudentProfileForm(instance=student_profile)
 
     joined_classes = student_profile.joined_classes.all()
     assignments = Assignment.objects.filter(assigned_class__in=joined_classes)
@@ -214,7 +218,7 @@ def student_profile(request):
         'assignments': assignments,
         'teachers': teachers,
         'performance': performance,
-        'form': form  # Pass the form to the template
+        'form': form
     }
 
     return render(request, 'student_profile.html', context)
@@ -388,26 +392,34 @@ def teacher_list(request):
     return render(request, "teacher_list.html", {"teachers": teachers})
 
 @login_required
-@user_passes_test(is_admin)
 def add_teacher(request):
-    if request.method == "POST":
-        form = UserRegistrationForm(request.POST)
-        if form.is_valid():
-            teacher = form.save(commit=False)
-            teacher.role = 'teacher'
-            teacher.save()
+    if request.method == 'POST':
+        teacher_reference_id = request.POST.get('teacher_reference_id')
+        assigned_class_id = request.POST.get('assigned_class')
 
-            # Create a TeacherProfile
-            TeacherProfile.objects.create(teacher=teacher)
+        if not teacher_reference_id or not assigned_class_id:
+            messages.error(request, "Please enter both Teacher Reference ID and select a class.")
+            return redirect('student_profile')
 
-            messages.success(request, "Teacher added successfully!")
-            return redirect('admin_dashboard')
+        try:
+            # Get class by assigned_class_id
+            classroom = Classroom.objects.get(id=assigned_class_id, teacher__reference_id=teacher_reference_id)
+
+            # Get student profile
+            student_profile = request.user.student_profile
+
+            # Add the class to the student’s profile (ManyToManyField)
+            student_profile.joined_classes.add(classroom)
+
+            messages.success(request, f"You have successfully joined {classroom.name}!")
+            return redirect('student_profile')
+
+        except Classroom.DoesNotExist:
+            messages.error(request, "Classroom not found for the given reference ID.")
+            return redirect('student_profile')
 
     else:
-        form = UserRegistrationForm()
-
-    return render(request, 'add_teacher.html', {'form': form})
-
+        return redirect('student_profile')
 
 def get_teacher_classes(request):
     reference_id = request.GET.get('reference_id')
@@ -460,10 +472,12 @@ def join_class(request):
 
         except TeacherProfile.DoesNotExist:
             messages.error(request, 'Teacher not found.')
+            return redirect('join_class')
         except Classroom.DoesNotExist:
             messages.error(request, 'Class not found.')
+            return redirect('join_class')
 
-    return redirect('student_profile')
+    return redirect('join_class')
 
 
 @login_required
@@ -551,7 +565,7 @@ def submit_assignment(request, assignment_id):
             submission.save()
 
             messages.success(request, 'Assignment submitted successfully!')
-            return redirect('student_dashboard', class_id=request.user.studentprofile.assigned_class.id)
+            return redirect('student_dashboard', class_id=request.user.StudentProfile.assigned_class.id)
 
     else:
         form = SubmissionForm()
@@ -741,7 +755,7 @@ def ask_query(request):
             query.student = request.user
             query.save()
             messages.success(request, "Query sent successfully!")
-            return redirect('student_dashboard', class_id=request.user.studentprofile.assigned_class.id)
+            return redirect('student_dashboard', class_id=request.user.StudentProfile.assigned_class.id)
     else:
         form = QueryForm()
 

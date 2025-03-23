@@ -95,7 +95,7 @@ class StudentProfile(models.Model):
     profile_pic = models.ImageField(upload_to='profile_pics/', default='default_folder/default_student.jpg')
     bio = models.TextField(blank=True, null=True)
     name = models.CharField(max_length=100)
-    joined_classes = models.ManyToManyField(Classroom, related_name='students_joined')
+    joined_classes = models.ManyToManyField(Classroom, related_name='joined_students', blank=True)
     
     def __str__(self):
         return self.student.email
