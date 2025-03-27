@@ -32,6 +32,8 @@ ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
+    'channels',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -70,8 +72,8 @@ TEMPLATES = [
 ]
 
 
+ASGI_APPLICATION = 'AssSubmission.asgi.application'
 WSGI_APPLICATION = 'AssSubmission.wsgi.application'
-
 
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
@@ -161,3 +163,17 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'submitech1@gmail.com'
 EMAIL_HOST_PASSWORD = 'Submi_Tech@2025'  # Use environment variable instead
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        },
+    },
+
+
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": "redis://127.0.0.1:6379/1",
+    }
+}

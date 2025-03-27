@@ -10,6 +10,8 @@ from difflib import SequenceMatcher
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import uuid
+from django.utils.timezone import now
+
 
 
 # Custom User Manager
@@ -82,8 +84,8 @@ class StudentProfile(models.Model):
     profile_pic = models.ImageField(upload_to='profile_pics/', default='default_folder/default_student.jpg')
     bio = models.TextField(blank=True, null=True)
     name = models.CharField(max_length=100)
-    joined_classes = models.ManyToManyField('Classroom', related_name='joined_students', blank=True)
-    
+    joined_classes = models.ManyToManyField('Classroom', related_name='joined_students', blank=True)  # ✅ Correct Many-to-Many
+
     def __str__(self):
         return self.student.email
 
@@ -224,16 +226,12 @@ class Performance(models.Model):
         return f"{self.student.student.email} - Avg: {self.average_score}"
 
 
-# Query Model for student queries
-class Query(models.Model):
-    student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='queries')
-    teacher = models.ForeignKey(TeacherProfile, on_delete=models.CASCADE, related_name='received_queries')
-    question = models.TextField()
-    answer = models.TextField(blank=True, null=True)
-    asked_at = models.DateTimeField(default=timezone.now)
-    answered_at = models.DateTimeField(blank=True, null=True)
-    response = models.TextField(blank=True, null=True) 
+class QueryMessage(models.Model):
+    classroom = models.ForeignKey('Classroom', on_delete=models.CASCADE, related_name='queries')
+    sender = models.ForeignKey('CustomUser', on_delete=models.CASCADE)  # Student or Teacher
+    message = models.TextField()
+    timestamp = models.DateTimeField(default=now)
 
     def __str__(self):
-        return f"Query by {self.student.username} to {self.teacher.username}"
+        return f"{self.sender.first_name}: {self.message[:50]}"
 

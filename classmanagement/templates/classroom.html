@@ -1,0 +1,33 @@
+<div id="chat-box">
+    <div id="messages"></div>
+    <input type="text" id="query-message" placeholder="Type your query..." />
+    <button onclick="sendMessage()">Send</button>
+</div>
+
+<script>
+    const classroomId = "{{ classroom.id }}";
+    const user = "{{ request.user.first_name }}";  // Get username
+
+    const chatSocket = new WebSocket(`ws://${window.location.host}/ws/classroom/${classroomId}/`);
+
+    chatSocket.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+        const messagesDiv = document.getElementById("messages");
+
+        const messageElement = document.createElement("p");
+        messageElement.innerHTML = `<strong>${data.sender}:</strong> ${data.message}`;
+        messagesDiv.appendChild(messageElement);
+    };
+
+    function sendMessage() {
+        const messageInput = document.getElementById("query-message");
+        const message = messageInput.value;
+
+        chatSocket.send(JSON.stringify({
+            "message": message,
+            "sender": user,
+        }));
+
+        messageInput.value = "";  // Clear input
+    }
+</script>

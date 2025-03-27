@@ -1,6 +1,6 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
-from .models import CustomUser, Assignment, Submission, Query, Classroom, StudentProfile, TeacherProfile
+from .models import CustomUser, Assignment, Submission,  Classroom, StudentProfile, TeacherProfile
 
 # ---------------------------------------------------
 # ✅ User Registration Form (For Teachers & Students)
@@ -146,21 +146,6 @@ class SubmissionForm(forms.ModelForm):
         model = Submission
         fields = ['assignment', 'file', 'comments']
 
-# ---------------------------------------------------
-# ✅ Query Form (For Students)
-# ---------------------------------------------------
-class QueryForm(forms.ModelForm):
-    class Meta:
-        model = Query
-        fields = ['question']
-
-# ---------------------------------------------------
-# ✅ Query Response Form (For Teachers)
-# ---------------------------------------------------
-class QueryResponseForm(forms.ModelForm):
-    class Meta:
-        model = Query
-        fields = ['response']
 
 # ---------------------------------------------------
 # ✅ Class Enrollment Form (For Students)

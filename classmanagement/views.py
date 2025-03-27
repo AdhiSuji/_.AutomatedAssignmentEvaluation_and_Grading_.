@@ -13,8 +13,8 @@ from nltk.tokenize import word_tokenize
 from django.http import JsonResponse
 from django.db.models import Q
 from django.core.paginator import Paginator
-from .models import (CustomUser, Classroom, Assignment, Submission,Performance, Query, StudentProfile, TeacherProfile)
-from .forms import (UserRegistrationForm, AssignmentForm, SubmissionForm,LoginForm, QueryForm, QueryResponseForm, ClassForm,StudentProfileForm)
+from .models import (CustomUser, Classroom, Assignment, Submission,Performance,  StudentProfile, TeacherProfile)
+from .forms import (UserRegistrationForm, AssignmentForm, SubmissionForm,LoginForm, ClassForm,StudentProfileForm)
 from PyPDF2 import PdfReader
 from docx import Document
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -263,7 +263,7 @@ def teacher_dashboard(request, class_id):
     page_obj = paginator.get_page(page_number)
 
     # ✅ Queries from students in the current classroom
-    queries = Query.objects.filter(student__joined_classes=classroom).filter(answer__isnull=False).exclude(answer="")
+    #queries = Query.objects.filter(student__joined_classes=classroom).filter(answer__isnull=False).exclude(answer="")
 
     # ✅ Top students by performance in this classroom
     top_students = Performance.objects.filter(student__joined_classes=classroom).order_by('-average_score')[:3]
@@ -273,7 +273,6 @@ def teacher_dashboard(request, class_id):
         'assignments': assignments,
         'submissions': submissions,
         'page_obj': page_obj,
-        'queries': queries,
         'top_students': top_students,
         'current_classroom': classroom
     })
@@ -406,6 +405,14 @@ def enroll_students(request, class_id):
 
     return render(request, 'enroll_student.html')
 
+@login_required
+@user_passes_test(is_teacher)
+def view_enrolled_students(request, class_id):
+    classroom = get_object_or_404(Classroom, id=class_id, teacher__teacher=request.user)
+    students = classroom.joined_students.all()  # ✅ Correct way to get enrolled students
+
+    return render(request, 'view_students.html', {'classroom': classroom, 'students': students})
+
 
 def teacher_list(request):
     teachers = CustomUser.objects.filter(role="teacher")
@@ -461,8 +468,6 @@ def get_teacher_classes(request):
     except TeacherProfile.DoesNotExist:
         return JsonResponse({'classes': []})
 
-from django.contrib import messages
-from django.shortcuts import redirect
 
 def join_class(request):
     if request.method == 'POST':
@@ -852,45 +857,6 @@ def grade_assignment(request, assignment_id):  # Add assignment_id here
 
     return render(request, "grade_assignment.html", {"assignment": assignment})
 
-@login_required
-@user_passes_test(is_student)
-def ask_query(request, class_id):
-    if request.method == "POST":
-        form = QueryForm(request.POST)
-        if form.is_valid():
-            query = form.save(commit=False)
-            query.student = request.user
-            query.save()
-            messages.success(request, "Query sent successfully!")
-
-            # Redirect to the correct class_id
-            return redirect('student_dashboard', class_id=class_id)
-    else:
-        form = QueryForm()
-
-    return render(request, 'ask_query.html', {'form': form})
-
-
-@login_required
-@user_passes_test(is_teacher)
-def respond_query(request, query_id):
-    query = get_object_or_404(Query, id=query_id)
-
-    if request.method == "POST":
-        form = QueryResponseForm(request.POST, instance=query)
-        if form.is_valid():
-            response = form.save(commit=False)
-            response.responded = True
-            response.save()
-            messages.success(request, "Query responded successfully!")
-            return redirect('teacher_dashboard')
-
-    else:
-        form = QueryResponseForm(instance=query)
-
-    return render(request, 'respond_query.html', {'form': form, 'query': query})
-
-
 
 
 #NOTIFICATIONS            
@@ -933,3 +899,6 @@ def student_progress(request):
     return render(request, 'student_progress.html', {'performance': performance})
 
 
+def query_view(request, class_id):
+    classroom = get_object_or_404(Classroom, id=class_id)
+    return render(request, 'query.html', {'classroom': classroom})

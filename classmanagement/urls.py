@@ -29,13 +29,14 @@ urlpatterns = [
     # Performance & Queries
     path('student/performance/', views.student_performance, name='student_performance'),
     path('student-progress/<int:student_id>/', views.student_progress, name='student_progress'),
-    path('queries/<int:class_id>/', views.ask_query, name='ask_query'),
-    path('queries/respond/', views.respond_query, name='respond_query'),
+    path('classroom/<int:class_id>/query/', views.query_view, name='class_query'),
+
 
     # Class & Teacher Management
     path('teacher/add/', views.add_teacher, name='add_teacher'),
     path('create_class/', views.create_class, name='teacher_create_class'),
     path('teacher/class/<int:class_id>/enroll-students/', views.enroll_students, name='enroll_students'),
+    path('teacher/class/<int:class_id>/students/', views.view_enrolled_students, name='view_students'),
     path('student/join-class/', views.join_class, name='join_class'),
     path("delete_class/<int:class_id>/", views.delete_class, name="delete_class"),
     path('get_teacher_classes/', views.get_teacher_classes, name='get_teacher_classes'),

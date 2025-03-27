@@ -103,6 +103,11 @@
                                                 </li>
                                             </ul>
 
+                                            <!-- Query Button -->
+                                            <a href="{% url 'class_query' class_id=classroom.id %}" class="btn btn-primary btn-sm">
+                                                Ask a Query
+                                            </a>
+
                                             <!-- Assignments List -->
                                             <h6 class="fw-semibold">Assignments:</h6>
                                             {% if classroom.assignments.all %}
@@ -127,10 +132,7 @@
                                                 Go to {{ classroom.name }} Dashboard
                                             </a>
                                             
-                                            <!-- QUERY BUTTON -->
-                                            <a href="{% url 'ask_query' classroom.id %}" class="btn btn-outline-warning btn-sm mt-2 w-100">
-                                                Ask a Query
-                                            </a>
+                                            
 
                                         </div>
                                     </div>

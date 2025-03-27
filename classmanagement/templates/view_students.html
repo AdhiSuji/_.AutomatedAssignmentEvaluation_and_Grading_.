@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<style>
+    .student-profile-pic {
+        width: 80px;  
+        height: 80px; 
+        border-radius: 50%; 
+        object-fit: cover; 
+        border: 2px solid #ccc; 
+    }
+    .student-card {
+        display: flex;
+        align-items: center;
+        background: #f9f9f9;
+        padding: 10px;
+        margin-bottom: 10px;
+        border-radius: 8px;
+        box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.1);
+    }
+    .student-info {
+        margin-left: 15px;
+        color: #2c3e50; /* Dark blue-gray color */
+    }
+    .student-info h4 {
+        color: #1e3799; /* Dark blue for the name */
+    }
+    .student-info p {
+        color: #34495e; /* Deep gray-blue for details */
+    }
+</style>
+
+<h2>Students Enrolled in {{ classroom.name }}</h2>
+
+{% if students %}
+    <div class="student-list">
+        {% for student in students %}
+            <div class="student-card">
+                <img src="{{ student.profile_pic.url }}" alt="{{ student.student.first_name }}" class="student-profile-pic">
+                <div class="student-info">
+                    <h4>{{ student.student.first_name }} {{ student.student.last_name }}</h4>
+                    <p>Email: {{ student.student.email }}</p>
+                    <p>Bio: {{ student.bio }}</p>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <p>No students have enrolled yet.</p>
+{% endif %}
+
+<a href="{% url 'teacher_dashboard' class_id=classroom.id %}" class="btn btn-secondary">Back to Dashboard</a>
+
+{% endblock %}

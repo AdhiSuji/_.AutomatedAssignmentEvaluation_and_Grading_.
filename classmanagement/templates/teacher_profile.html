@@ -97,14 +97,14 @@
 
                                                 <!-- Students List -->
                                                 <h6 class="fw-semibold mb-3">Students Enrolled:</h6>
-                                                {% if classroom.students.all %}
-                                                    <p class="small text-muted">{{ classroom.students.count }} students enrolled</p>
-                                                    <a href="{% url 'enroll_students' classroom.id %}" class="btn btn-primary btn-sm mt-2">
-                                                        See All Students
-                                                    </a>
+                                                {% if classroom.joined_students.exists %}
+                                                    <p class="small text-muted">{{ classroom.joined_students.count }} students enrolled</p> 
+                                                    <a href="{% url 'view_students' classroom.id %}" class="btn btn-primary btn-sm mt-2"> See All Students </a> 
                                                 {% else %}
                                                     <p class="small text-muted">No students enrolled yet.</p>
                                                 {% endif %}
+
+                                                <a href="{% url 'classroom_queries' classroom.id %}" class="btn btn-success btn-sm mt-3">Ask a Query</a>
 
 
                                             <!-- Assignments List -->
