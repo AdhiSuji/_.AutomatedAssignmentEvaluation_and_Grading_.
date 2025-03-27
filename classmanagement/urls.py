@@ -21,23 +21,25 @@ urlpatterns = [
     path('assignments/give/<int:class_id>/', views.give_assignment, name='give_assignment'),
     path("assignments/given/<int:class_id>/", views.given_assignment, name="given_assignment"),
     path('assignments/submit/submit/<int:assignment_id>/', views.submit_assignment, name='submit_assignment'),
-    path('assignments/view/<int:assignment_id>/', views.view_submissions, name='view_submissions'),
-    path('assignments/grade/', views.grade_assignment, name='grade_assignment'),
+    path('teacher/view-submissions/', views.view_submissions, name='view_submissions_all'),
+    path('teacher/class/<int:classroom_id>/view-submissions/', views.view_submissions, name='view_submissions_by_classroom'),
+    path('teacher/class/<int:classroom_id>/student/<int:student_id>/view-submissions/', views.view_submissions, name='view_submissions_by_student'),
+    path('assignments/grade/<int:assignment_id>/', views.grade_assignment, name='grade_assignment'),
 
     # Performance & Queries
     path('student/performance/', views.student_performance, name='student_performance'),
     path('student-progress/<int:student_id>/', views.student_progress, name='student_progress'),
-    path('queries/', views.ask_query, name='ask_query'),
+    path('queries/<int:class_id>/', views.ask_query, name='ask_query'),
     path('queries/respond/', views.respond_query, name='respond_query'),
 
     # Class & Teacher Management
     path('teacher/add/', views.add_teacher, name='add_teacher'),
     path('create_class/', views.create_class, name='teacher_create_class'),
-    path('class/enroll/', views.enroll_student, name='enroll_student'),
+    path('teacher/class/<int:class_id>/enroll-students/', views.enroll_students, name='enroll_students'),
     path('student/join-class/', views.join_class, name='join_class'),
     path("delete_class/<int:class_id>/", views.delete_class, name="delete_class"),
     path('get_teacher_classes/', views.get_teacher_classes, name='get_teacher_classes'),
-    path('teacher/plagiarism_check/<int:assignment_id>/', views.start_plagiarism_check, name='start_plagiarism_check'),
+    path('teacher/plagiarism_check/<int:assignment_id>/', views.plagiarism_check, name='plagiarism_check'),
 
     # Notifications
     path('notifications/send/', views.send_notifications, name='send_notifications'),

@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+    <h2 class="mb-3 text-center">Submissions for {{ classroom.name }}</h2>
+
+    <div class="table-responsive">
+        <table class="table table-striped table-bordered">
+            <thead class="table-dark">
+                <tr>
+                    <th>Student Name</th>
+                    <th>Submission Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for data in submissions %}
+                <tr>
+                    <td>{{ data.student.student.first_name }} {{ data.student.student.last_name }}</td>
+                    <td>
+                        {% if data.submitted_at %}
+                            <span class="badge bg-success">✅ Submitted</span>
+                        {% else %}
+                            <span class="badge bg-danger">❌ Not Submitted</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if data.file %}
+                            <a href="{{ data.file.url }}" class="btn btn-primary btn-sm" download>
+                                📥 Download
+                            </a>
+                        {% else %}
+                            <span class="text-muted">No Submission</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4" class="text-center text-muted">No submissions available</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

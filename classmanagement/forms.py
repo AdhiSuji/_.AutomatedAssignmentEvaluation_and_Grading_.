@@ -71,7 +71,7 @@ class UserRegistrationForm(UserCreationForm):
             if user.role == 'student':
                 StudentProfile.objects.create(
                     student=user,
-                    assigned_class=self.cleaned_data['selected_class']
+                    joined_classes=self.cleaned_data['selected_class']
                 )
         return user
 
@@ -207,7 +207,7 @@ class EnrollmentForm(forms.Form):
         if selected_class in student_profile.assigned_classes.all():
             raise forms.ValidationError("You are already enrolled in this class.")
 
-        student_profile.assigned_classes.add(selected_class)
+        student_profile.es.add(selected_class)
         return student_profile
 
 

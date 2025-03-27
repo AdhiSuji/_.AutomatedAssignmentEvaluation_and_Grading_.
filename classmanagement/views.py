@@ -1,9 +1,15 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
+from io import BytesIO
 from django.utils import timezone
 from django.contrib.auth import authenticate, login, logout, get_user_model
 from django.core.mail import send_mail
+from collections import Counter
+import nltk
+import string
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
 from django.http import JsonResponse
 from django.db.models import Q
 from django.core.paginator import Paginator
@@ -13,6 +19,7 @@ from PyPDF2 import PdfReader
 from docx import Document
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from .notifications import notify_teacher_and_student  # Ensure this function exists
 User = get_user_model()
 
 #UTILS             
@@ -155,41 +162,39 @@ def student_default_profile():
 def teacher_default_profile():
     return 'default_folder/default_teacher.jpg'  # path inside media folder
 
-# ✅ Teacher Profile View
 @login_required
 @user_passes_test(is_teacher)
 def teacher_profile(request):
     teacher_profile = get_object_or_404(TeacherProfile, teacher=request.user)
 
     # ✅ Fetch all classrooms assigned to this teacher
-    classes = Classroom.objects.filter(teacher=teacher_profile)
+    created_classes = Classroom.objects.filter(teacher=teacher_profile)
 
     query = request.GET.get('q')
 
-    # ✅ FIXED HERE: Filter students using the correct field
-    students = StudentProfile.objects.filter(assigned_classes__in=classes).distinct()
+    # ✅ Corrected field here!
+    students = StudentProfile.objects.filter(joined_classes__in=created_classes).distinct()
 
     if query:
         students = students.filter(
-            Q(student__username__icontains=query) |
-            Q(student__first_name__icontains=query) |
-            Q(student__last_name__icontains=query)
+            Q(name__icontains=query) |
+            Q(student__email__icontains=query)
         )
 
     paginator = Paginator(students, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    if not classes.exists():
+    if not created_classes.exists():
         messages.info(request, "You haven't created any classrooms yet.")
 
     return render(request, 'teacher_profile.html', {
         'teacher_profile': teacher_profile,
-        'classes': classes,
+        'created_classes': created_classes,
         'page_obj': page_obj,
         'query': query,
-    })
 
+    })
 
 
 @login_required
@@ -208,13 +213,13 @@ def student_profile(request):
         form = StudentProfileForm(instance=student_profile)
 
     joined_classes = student_profile.joined_classes.all()
-    assignments = Assignment.objects.filter(assigned_class__in=joined_classes)
+    assignments = Assignment.objects.filter(joined_classes__in=joined_classes)
     teachers = TeacherProfile.objects.filter(classrooms__in=joined_classes).distinct()
     performance, _ = Performance.objects.get_or_create(student=student_profile)
 
     context = {
         'student_profile': student_profile,
-        'assigned_classes': joined_classes,
+        'joined_classes': joined_classes,
         'assignments': assignments,
         'teachers': teachers,
         'performance': performance,
@@ -231,6 +236,7 @@ def teacher_dashboard(request, class_id):
     # ✅ All classes by this teacher
     classes = Classroom.objects.filter(teacher=teacher_profile)
 
+    # ✅ Get current classroom or redirect
     try:
         classroom = Classroom.objects.get(id=class_id, teacher=teacher_profile)
     except Classroom.DoesNotExist:
@@ -238,28 +244,29 @@ def teacher_dashboard(request, class_id):
         return redirect('teacher_dashboard', class_id=classes.first().id if classes.exists() else None)
 
     # ✅ Assignments and submissions for this classroom
-    assignments = Assignment.objects.filter(teacher=teacher_profile, assigned_class=classroom)
-    submissions = Submission.objects.filter(assignment__teacher=teacher_profile, assignment__assigned_class=classroom)
+    assignments = Assignment.objects.filter(teacher=teacher_profile, joined_classes=classroom)
+    submissions = Submission.objects.filter(assignment__teacher=teacher_profile, assignment__joined_classes=classroom)
 
     query = request.GET.get('q')
 
-    # ✅ FIX: Use assigned_classes here
-    students = StudentProfile.objects.filter(assigned_classes__in=classes).distinct()
+    # ✅ Students who joined any of this teacher's classes
+    students = StudentProfile.objects.filter(joined_classes__in=classes).distinct()
 
     if query:
         students = students.filter(
-            Q(student__username__icontains=query) |
-            Q(student__first_name__icontains=query)
+            Q(name__icontains=query) |
+            Q(student__email__icontains=query)
         )
 
     paginator = Paginator(students, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    # ✅ FIX: Use assigned_classes for classroom filtering
-    queries = Query.objects.filter(student__assigned_classes=classroom).filter(answer__isnull=False).exclude(answer="")
+    # ✅ Queries from students in the current classroom
+    queries = Query.objects.filter(student__joined_classes=classroom).filter(answer__isnull=False).exclude(answer="")
 
-    top_students = Performance.objects.filter(student__assigned_classes=classroom).order_by('-average_score')[:3]
+    # ✅ Top students by performance in this classroom
+    top_students = Performance.objects.filter(student__joined_classes=classroom).order_by('-average_score')[:3]
 
     return render(request, 'teacher_dashboard.html', {
         'classes': classes,
@@ -278,20 +285,27 @@ def student_dashboard(request, class_id=None):
     student = request.user
     student_profile = get_object_or_404(StudentProfile, student=student)
 
+    # If class_id is passed, use it; otherwise get the first joined_class (optional logic)
     if class_id:
         classroom = get_object_or_404(Classroom, id=class_id)
     else:
-        # This assumes student belongs to ONE classroom; otherwise adjust logic.
-        classroom = student_profile.classrooms.first()
+        # Grabbing the first class the student joined
+        classroom = student_profile.joined_classes.first()
 
-    assignments = Assignment.objects.filter(assigned_class=classroom)
-    submissions = Submission.objects.filter(student=student)
+    if not classroom:
+        # No class joined yet
+        messages.warning(request, "You haven't joined any classes yet!")
+        return redirect('somewhere_else')  # Update to an appropriate URL
 
-    # Searching for students (other students in same class)
+    # ✅ Get assignments assigned to this classroom
+    assignments = Assignment.objects.filter(joined_classes=classroom)
+
+    # ✅ Get student's submissions
+    submissions = Submission.objects.filter(student=student_profile)
+
+    # ✅ Search for other students in the same classroom
     query = request.GET.get('q')
-
-    # Get all students in the same classes (excluding self if needed)
-    all_students = classroom.students.all()
+    all_students = classroom.joined_students.all()  # related_name='joined_students' in Classroom model
 
     if query:
         all_students = all_students.filter(
@@ -299,8 +313,8 @@ def student_dashboard(request, class_id=None):
             Q(student__first_name__icontains=query)
         )
 
-    # Paginate the list of students
-    paginator = Paginator(all_students, 10)  # Show 10 students per page
+    # ✅ Paginate the list of students
+    paginator = Paginator(all_students, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
@@ -309,8 +323,9 @@ def student_dashboard(request, class_id=None):
         'submissions': submissions,
         'classroom': classroom,
         'page_obj': page_obj,
-        'query': query
+        'query': query,
     })
+
 
 #ADMIN VIEWS (Optional)   
 @login_required
@@ -360,32 +375,37 @@ def teacher_classes(request):
 
 @login_required
 @user_passes_test(is_student)
-def enroll_student(request):
+def enroll_students(request, class_id):
+    print("DEBUG: Is user authenticated?", request.user.is_authenticated)
+    print("DEBUG: Logged-in user:", request.user)
+    print("DEBUG: User groups:", request.user.groups.all())
+
     if request.method == "POST":
         reference_id = request.POST.get("reference_id")
         class_id = request.POST.get("selected_class")
 
-        try:
-            teacher = TeacherProfile.objects.get(reference_id=reference_id)
-            selected_class = Classroom.objects.get(id=class_id, teacher=teacher)
-
-            student_profile = get_object_or_404(StudentProfile, student=request.user)
-
-            if selected_class in student_profile.assigned_classes.all():
-                messages.warning(request, "You are already enrolled in this class.")
-            else:
-                student_profile.assigned_classes.add(selected_class)
-                messages.success(request, "Successfully enrolled in class.")
-
-            return redirect('student_dashboard')
-
-        except TeacherProfile.DoesNotExist:
+        teacher = TeacherProfile.objects.filter(reference_id=reference_id).first()
+        if not teacher:
             messages.error(request, "Invalid Teacher Reference ID.")
-        except Classroom.DoesNotExist:
-            messages.error(request, "Invalid Class Selection.")
+            return redirect('enroll_student')
 
-    # Classes are fetched dynamically via get_teacher_classes(), so no need to pass all classes
+        selected_class = Classroom.objects.filter(id=class_id, teacher=teacher).first()
+        if not selected_class:
+            messages.error(request, "Invalid Class Selection.")
+            return redirect('enroll_student')
+
+        student_profile = get_object_or_404(StudentProfile, student=request.user)
+
+        if selected_class in student_profile.joined_classes.all():
+            messages.warning(request, "You are already enrolled in this class.")
+        else:
+            student_profile.joined_classes.add(selected_class)
+            messages.success(request, f"Successfully enrolled in {selected_class.name}.")
+
+        return redirect('student_dashboard')
+
     return render(request, 'enroll_student.html')
+
 
 def teacher_list(request):
     teachers = CustomUser.objects.filter(role="teacher")
@@ -395,15 +415,15 @@ def teacher_list(request):
 def add_teacher(request):
     if request.method == 'POST':
         teacher_reference_id = request.POST.get('teacher_reference_id')
-        assigned_class_id = request.POST.get('assigned_class')
+        joined_classes_id = request.POST.get('joined_classes')
 
-        if not teacher_reference_id or not assigned_class_id:
+        if not teacher_reference_id or not joined_classes_id:
             messages.error(request, "Please enter both Teacher Reference ID and select a class.")
             return redirect('student_profile')
 
         try:
             # Get class by assigned_class_id
-            classroom = Classroom.objects.get(id=assigned_class_id, teacher__reference_id=teacher_reference_id)
+            classroom = Classroom.objects.get(id=joined_classes_id, teacher__reference_id=teacher_reference_id)
 
             # Get student profile
             student_profile = request.user.student_profile
@@ -440,26 +460,26 @@ def get_teacher_classes(request):
 
     except TeacherProfile.DoesNotExist:
         return JsonResponse({'classes': []})
-   
-@login_required
+
+from django.contrib import messages
+from django.shortcuts import redirect
+
 def join_class(request):
-    print('User:', request.user)
-    print('Is authenticated:', request.user.is_authenticated)
-
-    if not request.user.is_authenticated:
-        messages.error(request, 'You are not logged in.')
-        return redirect('login')
-
     if request.method == 'POST':
         teacher_reference_id = request.POST.get('teacher_reference_id')
-        assigned_class_id = request.POST.get('assigned_class')
+        joined_classes_id = request.POST.get('joined_classes')
 
+        print("Received POST Data:", request.POST)  # Debugging output
+
+        if not teacher_reference_id or not joined_classes_id:
+            messages.error(request, "Please enter both Teacher Reference ID and select a class.")
+            return redirect('join_class')  # Redirect back to the form
+        
         try:
             teacher = TeacherProfile.objects.get(reference_id=teacher_reference_id)
-            classroom = Classroom.objects.get(id=assigned_class_id)
+            classroom = Classroom.objects.get(id=joined_classes_id)
 
-            student_profile, created = StudentProfile.objects.get_or_create(user=request.user)
-
+            student_profile, created = StudentProfile.objects.get_or_create(student=request.user)
             if classroom in student_profile.joined_classes.all():
                 messages.warning(request, 'You have already joined this class.')
                 return redirect('student_profile')
@@ -467,15 +487,16 @@ def join_class(request):
             student_profile.joined_classes.add(classroom)
             student_profile.save()
 
-            messages.success(request, 'You have successfully joined the class!')
+            messages.success(request, 'Successfully joined the class!')
             return redirect('student_profile')
 
         except TeacherProfile.DoesNotExist:
             messages.error(request, 'Teacher not found.')
-            return redirect('join_class')
         except Classroom.DoesNotExist:
             messages.error(request, 'Class not found.')
-            return redirect('join_class')
+        except Exception as e:
+            messages.error(request, f"Unexpected error: {e}")
+            print(f"Unexpected error: {e}")  # Print error for debugging
 
     return redirect('join_class')
 
@@ -503,7 +524,7 @@ def give_assignment(request, class_id):
         if form.is_valid():
             assignment = form.save(commit=False)
             assignment.teacher = teacher_profile  # ✅ Now it's the correct object type
-            assignment.assigned_class = classroom  # ✅ Assign class based on class_id
+            assignment.joined_classes = classroom  # ✅ Assign class based on class_id
             assignment.save()
             messages.success(request, "Assignment given successfully!")
             return redirect('teacher_dashboard', class_id=class_id)
@@ -526,7 +547,7 @@ def give_assignment(request, class_id):
 @login_required
 def given_assignment(request, class_id):
     class_obj = get_object_or_404(Classroom, id=class_id)
-    assignments = Assignment.objects.filter(assigned_class=class_obj)
+    assignments = Assignment.objects.filter(joined_classes=class_obj)
 
     return render(request, "given_assignment.html", {
         "assignments": assignments,
@@ -536,23 +557,50 @@ def given_assignment(request, class_id):
 
 @login_required
 @user_passes_test(is_teacher)
-def view_submissions(request):
-    submissions = Submission.objects.filter(assignment__teacher=request.user)
-    return render(request, 'view_submissions.html', {'submissions': submissions})
+def view_submissions(request, classroom_id=None, student_id=None):
+    teacher_profile = get_object_or_404(TeacherProfile, teacher=request.user)
+    submissions = Submission.objects.filter(assignment__teacher=teacher_profile)
+
+    classroom = None  # Initialize classroom as None
+
+    if classroom_id:
+        classroom = get_object_or_404(Classroom, id=classroom_id)  # ✅ Fetch classroom object
+        submissions = submissions.filter(assignment__joined_classes__id=classroom_id)
+
+    if student_id:
+        submissions = submissions.filter(student_id=student_id)
+
+    context = {
+        'submissions': submissions,
+        'classroom': classroom,  # ✅ Pass classroom to template
+        'classroom_id': classroom_id,
+        'student_id': student_id,
+    }
+
+    return render(request, 'view_submissions.html', context)
 
 @login_required
 @user_passes_test(is_student)
 def submit_assignment(request, assignment_id):
     assignment = get_object_or_404(Assignment, id=assignment_id)
+
+    # Get student's joined classes
+    student_profile = request.user.student_profile
+    student_classes = student_profile.joined_classes.all()
+
+    # Ensure the assignment belongs to a class the student is part of
+    if not assignment.joined_classes in student_classes:
+        messages.error(request, "You are not enrolled in this class.")
+        return redirect('student_dashboard')
+
+    # Fetch assignments for pagination (optional)
     query = request.GET.get('q')
+    assignments = Assignment.objects.filter(joined_classes__in=student_classes)
 
-    # Get assignments assigned to the student’s classes
     if query:
-        assignment = assignment.filter(
-            Q(title__icontains=query)
-        )
+        assignments = assignments.filter(title__icontains=query)
 
-    paginator = Paginator(assignment, 10)
+    paginator = Paginator(assignments, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
@@ -560,48 +608,69 @@ def submit_assignment(request, assignment_id):
         form = SubmissionForm(request.POST, request.FILES)
         if form.is_valid():
             submission = form.save(commit=False)
-            submission.student = request.user
+            submission.student = student_profile  # ✅ Use StudentProfile
             submission.assignment = assignment
             submission.save()
 
             messages.success(request, 'Assignment submitted successfully!')
-            return redirect('student_dashboard', class_id=request.user.StudentProfile.assigned_class.id)
-
+            return redirect('student_dashboard', class_id=assignment.joined_classes.id)
     else:
         form = SubmissionForm()
 
     return render(request, 'submit_assignment.html', {
         'form': form,
-        'assignment': assignment, 
+        'assignment': assignment,
+        'assignments': assignments,
         'page_obj': page_obj,
-        'query': query})
+        'query': query
+    })
+
+# Ensure NLTK stopwords are downloaded
+nltk.download('stopwords')
+nltk.download('punkt')
+
+# Define plagiarism threshold
+PLAGIARISM_THRESHOLD = 40  # Similarity threshold for plagiarism
 
 
-
-def start_plagiarism_check(request, assignment_id):
+### 🟢 **Plagiarism Checking System** 🟢
+def plagiarism_check(request, assignment_id):
     assignment = get_object_or_404(Assignment, id=assignment_id)
     submissions = Submission.objects.filter(assignment=assignment)
 
-    keywords = assignment.keywords.split(",")  # Assuming keywords are comma-separated
+    teacher_keywords = assignment.keywords.split(",")  # Extract teacher-set keywords
     teacher_email = assignment.teacher.teacher.email
 
     for submission in submissions:
-        # Exclude current submission from others when checking plagiarism
+        # Extract text from file
+        submission_text = extract_text(submission.file)
+
+        # Get unique keywords and their frequency
+        extracted_keywords = extract_keywords(submission_text)
+
+        # Store extracted content & keywords in the database
+        submission.content = submission_text  # Save extracted text
+        submission.keywords = str(extracted_keywords)  # Save keyword frequency
+        submission.save()
+
+        print(f"Submission {submission.student.student.email}:")
+        print(f"Extracted Keywords: {extracted_keywords}\n")
+
+        # Check for student-to-student plagiarism
         other_subs = submissions.exclude(id=submission.id)
-        
-        results = check_plagiarism_and_grade(submission, other_subs, keywords, teacher_email)
-        
-        print(f"Checked submission {submission.student.student.email}: {results}")
+        plagiarism_score = check_student_to_student_plagiarism(submission, other_subs, teacher_email)
 
-    messages.success(request, "Plagiarism checks complete!")
-    return redirect('submitted_assignments', assignment_id=assignment.id)
+        print(f"Checked submission {submission.student.student.email}: Plagiarism Score: {plagiarism_score}")
+
+    messages.success(request, "Plagiarism checks complete with keyword extraction!")
+    return redirect('submit_assignment', assignment_id=assignment.id)
 
 
-PLAGIARISM_THRESHOLD = 40  # Student-to-student similarity threshold
-
+### 🟢 **Extract Text from Files** 🟢
 def extract_text(file_field):
-    # Detect file type and call appropriate function
-    filename = file_field.name
+    """Detect file type and extract text."""
+    filename = file_field.name.lower()
+
     if filename.endswith('.pdf'):
         return extract_text_from_pdf(file_field)
     elif filename.endswith('.txt'):
@@ -609,28 +678,28 @@ def extract_text(file_field):
     elif filename.endswith('.docx'):
         return extract_text_from_docx(file_field)
     else:
-        print("Unsupported file type!")
+        print(f"Unsupported file type: {filename}")
         return ""
 
+
 def extract_text_from_pdf(file_field):
+    """Extract text from a PDF file."""
     try:
         file_field.open()
         reader = PdfReader(file_field)
-        text = ""
-        for page in reader.pages:
-            page_text = page.extract_text()
-            if page_text:
-                text += page_text
+        text = "\n".join([page.extract_text() or "" for page in reader.pages])
         file_field.close()
-        return text
+        return text if text.strip() else "No readable text found in PDF."
     except Exception as e:
         print(f"PDF Extraction error: {str(e)}")
         return ""
 
+
 def extract_text_from_txt(file_field):
+    """Extract text from a TXT file."""
     try:
-        file_field.open('r')  # Open file in text mode
-        content = file_field.read()
+        file_field.open()
+        content = file_field.read().decode('utf-8')  # Convert bytes to string
         file_field.close()
         return content
     except Exception as e:
@@ -639,9 +708,11 @@ def extract_text_from_txt(file_field):
 
 
 def extract_text_from_docx(file_field):
+    """Extract text from a DOCX file."""
     try:
-        file_field.open('rb')  # Open file in binary mode
-        document = Document(file_field)
+        file_field.open()
+        doc_file = BytesIO(file_field.read())  # Convert to BytesIO
+        document = Document(doc_file)  # Load DOCX from BytesIO
         text = "\n".join([paragraph.text for paragraph in document.paragraphs])
         file_field.close()
         return text
@@ -650,22 +721,38 @@ def extract_text_from_docx(file_field):
         return ""
 
 
-def check_keyword_similarity(submission_text, keywords):
-    keyword_matches = {}
-    text_lower = submission_text.lower()
-    for keyword in keywords:
-        clean_keyword = keyword.strip().lower()
-        count = text_lower.count(clean_keyword)
-        keyword_matches[clean_keyword] = count
-    return keyword_matches
+### 🟢 **Extract Keywords & Count Frequency** 🟢
+def extract_keywords(text):
+    """Extract unique keywords and their frequency from text."""
+    stop_words = set(stopwords.words('english'))
+    text = text.lower().translate(str.maketrans("", "", string.punctuation))  # Lowercase & remove punctuation
+    words = word_tokenize(text)  # Tokenize words
+    filtered_words = [word for word in words if word not in stop_words and word.isalpha()]  # Remove stopwords & numbers
+
+    keyword_counts = Counter(filtered_words)  # Count keyword frequency
+    return dict(keyword_counts)
 
 
+### 🟢 **Keyword Matching System** 🟢
+def check_keyword_match(teacher_keywords, extracted_keywords):
+    """Check how many teacher keywords match with extracted student keywords."""
+    teacher_keywords = [kw.strip().lower() for kw in teacher_keywords]
+    student_keywords = set(extracted_keywords.keys())  # Extract unique words
+
+    matched = sum(1 for kw in teacher_keywords if kw in student_keywords)
+    total_keywords = len(teacher_keywords)
+
+    return (matched / total_keywords) * 100 if total_keywords > 0 else 0
+
+
+### 🟢 **Student-to-Student Plagiarism Check** 🟢
 def check_student_to_student_plagiarism(current_submission, other_submissions, teacher_email):
-    current_text = extract_text_from_pdf(current_submission.file)
+    """Check similarity between student submissions using TF-IDF & Cosine Similarity."""
+    current_text = extract_text(current_submission.file)
 
     other_texts = []
     for sub in other_submissions:
-        other_text = extract_text_from_pdf(sub.file)
+        other_text = extract_text(sub.file)
         if other_text.strip():
             other_texts.append(other_text)
 
@@ -674,21 +761,39 @@ def check_student_to_student_plagiarism(current_submission, other_submissions, t
         current_submission.save()
         return 0.0
 
+    # Compute TF-IDF vectors
     vectorizer = TfidfVectorizer().fit_transform([current_text] + other_texts)
     vectors = vectorizer.toarray()
-    
+
+    # Compute similarity scores
     similarities = cosine_similarity([vectors[0]], vectors[1:])[0]
     highest_similarity = max(similarities) * 100 if similarities.size > 0 else 0
-    
-    current_submission.plagiarism_score = round(highest_similarity, 2)
-    current_submission.save()
 
+    # Save plagiarism score
+    if highest_similarity > 0:
+        current_submission.plagiarism_score = round(highest_similarity, 2)
+        current_submission.save()
+
+    # Notify if plagiarism detected
     if highest_similarity > PLAGIARISM_THRESHOLD and not current_submission.notified:
         notify_teacher_and_student(current_submission, teacher_email)
         current_submission.notified = True
         current_submission.save()
 
     return highest_similarity
+
+### 🟢 **Notify Teacher & Student** 🟢
+def notify_teacher_and_student(submission, teacher_email):
+    """Send notification if plagiarism is detected."""
+    student_email = submission.student.student.email
+    plagiarism_score = submission.plagiarism_score
+
+    print(f"⚠️ Plagiarism Alert ⚠️")
+    print(f"Student: {student_email}")
+    print(f"Plagiarism Score: {plagiarism_score}%")
+    print(f"Notification sent to: {teacher_email}")
+
+    # Here, you can integrate email notifications if needed
 
 
 def notify_teacher_and_student(submission, teacher_email):
@@ -715,7 +820,8 @@ def check_plagiarism_and_grade(submission, other_submissions, keywords, teacher_
 
     submission_text = extract_text_from_pdf(submission.file)
 
-    keyword_match = check_keyword_similarity(submission_text, keywords)
+    extracted_keywords = extract_keywords(submission_text)  # Extract keywords from student text
+    keyword_match = check_keyword_match(keywords, extracted_keywords)
     results['keyword_match'] = keyword_match
 
     plagiarism_score = check_student_to_student_plagiarism(submission, other_submissions, teacher_email)
@@ -726,28 +832,29 @@ def check_plagiarism_and_grade(submission, other_submissions, keywords, teacher_
 
 @login_required
 @user_passes_test(is_teacher)
-def grade_assignment(request, submission_id):
-    submission = get_object_or_404(Submission, id=submission_id)
+def grade_assignment(request, assignment_id):  # Add assignment_id here
+    assignment = get_object_or_404(Assignment, id=assignment_id)
 
-    if request.method == 'POST':
-        grade = request.POST.get('grade')
-        feedback = request.POST.get('feedback')
+    if request.method == "POST":
+        grade = request.POST.get("grade")
+        feedback = request.POST.get("feedback")
 
-        submission.grade = grade
-        submission.feedback = feedback
-        submission.graded = True
-        submission.save()
+        submission = Submission.objects.filter(assignment=assignment).first()
+        if submission:
+            submission.grade = grade
+            submission.feedback = feedback
+            submission.save()
+            messages.success(request, "Assignment graded successfully!")
+        else:
+            messages.error(request, "No submission found for this assignment.")
 
-        submission.student.performance.update_performance()
-
-        messages.success(request, 'Assignment graded successfully!')
         return redirect('teacher_dashboard')
 
-    return render(request, 'grade_assignment.html', {'submission': submission})
+    return render(request, "grade_assignment.html", {"assignment": assignment})
 
 @login_required
 @user_passes_test(is_student)
-def ask_query(request):
+def ask_query(request, class_id):
     if request.method == "POST":
         form = QueryForm(request.POST)
         if form.is_valid():
@@ -755,12 +862,13 @@ def ask_query(request):
             query.student = request.user
             query.save()
             messages.success(request, "Query sent successfully!")
-            return redirect('student_dashboard', class_id=request.user.StudentProfile.assigned_class.id)
+
+            # Redirect to the correct class_id
+            return redirect('student_dashboard', class_id=class_id)
     else:
         form = QueryForm()
 
     return render(request, 'ask_query.html', {'form': form})
-
 
 
 @login_required

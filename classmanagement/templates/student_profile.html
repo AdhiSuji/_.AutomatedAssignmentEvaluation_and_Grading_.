@@ -96,14 +96,11 @@
                                         <div class="accordion-body">
 
                                             <!-- Teachers List -->
-                                            <h6 class="fw-semibold">Teacher(s):</h6>
+                                            <h6 class="fw-semibold">Teacher:</h6>
                                             <ul class="list-group list-group-flush mb-3">
-                                                {% for teacher in classroom.teachers.all %}
-                                                    <li class="list-group-item small">
-                                                        {{ teacher.get_full_name }} <br>
-                                                        <small class="text-muted">{{ teacher.email }}</small>
-                                                    </li>
-                                                {% endfor %}
+                                                <li class="list-group-item small">
+                                                    {{ classroom.teacher.teacher.get_full_name }} 
+                                                </li>
                                             </ul>
 
                                             <!-- Assignments List -->
@@ -128,6 +125,11 @@
 
                                             <a href="{% url 'student_dashboard' classroom.id %}" class="btn btn-outline-primary btn-sm mt-3 w-100">
                                                 Go to {{ classroom.name }} Dashboard
+                                            </a>
+                                            
+                                            <!-- QUERY BUTTON -->
+                                            <a href="{% url 'ask_query' classroom.id %}" class="btn btn-outline-warning btn-sm mt-2 w-100">
+                                                Ask a Query
                                             </a>
 
                                         </div>
@@ -157,25 +159,27 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body p-4">
-                <form method="POST" action="{% url 'add_teacher' %}">
+                <form method="POST" action="{% url 'join_class' %}">
                     {% csrf_token %}
+                    
                     <div class="form-group mb-3">
                         <label for="teacher_reference_id" class="form-label">Teacher Reference ID:</label>
                         <input type="text" name="teacher_reference_id" id="teacher_reference_id" class="form-control" placeholder="Enter teacher's reference ID" required>
                     </div>
-
+            
                     <div class="form-group mb-3">
                         <label for="class_selection" class="form-label">Select Class:</label>
-                        <select name="assigned_class" id="class_selection" class="form-select" disabled>
+                        <select name="joined_classes" id="class_selection" class="form-select" disabled required>
                             <option value="">Enter Reference ID first</option>
                         </select>
                     </div>
-
+            
                     <button type="submit" class="btn btn-primary w-100" id="addTeacherBtn" disabled>
                         Join Class
                     </button>
                 </form>
             </div>
+            
         </div>
     </div>
 </div>

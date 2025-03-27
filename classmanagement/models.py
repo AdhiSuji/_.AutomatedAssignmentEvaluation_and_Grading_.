@@ -4,7 +4,7 @@ from django.dispatch import receiver
 from django.db import models
 from django.db import models
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import AbstractUser,  BaseUserManager, User
+from django.contrib.auth.models import AbstractUser,  BaseUserManager
 from django.utils import timezone
 from difflib import SequenceMatcher
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -76,6 +76,17 @@ class TeacherProfile(models.Model):
     def __str__(self):
         return f"{self.teacher.first_name} ({self.reference_id})"
 
+# Student Profile
+class StudentProfile(models.Model):
+    student = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='student_profile', primary_key=True)
+    profile_pic = models.ImageField(upload_to='profile_pics/', default='default_folder/default_student.jpg')
+    bio = models.TextField(blank=True, null=True)
+    name = models.CharField(max_length=100)
+    joined_classes = models.ManyToManyField('Classroom', related_name='joined_students', blank=True)
+    
+    def __str__(self):
+        return self.student.email
+
 
 # Classroom Model
 class Classroom(models.Model):
@@ -89,17 +100,6 @@ class Classroom(models.Model):
         return f"{self.name} - {self.teacher.teacher.first_name}"
 
 
-# Student Profile
-class StudentProfile(models.Model):
-    student = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='student_profile', primary_key=True)
-    profile_pic = models.ImageField(upload_to='profile_pics/', default='default_folder/default_student.jpg')
-    bio = models.TextField(blank=True, null=True)
-    name = models.CharField(max_length=100)
-    joined_classes = models.ManyToManyField(Classroom, related_name='joined_students', blank=True)
-    
-    def __str__(self):
-        return self.student.email
-
 # Assignment Model
 class Assignment(models.Model):
     title = models.CharField(max_length=255)
@@ -108,10 +108,11 @@ class Assignment(models.Model):
     keywords = models.TextField(blank=True, null=True)
 
     teacher = models.ForeignKey(TeacherProfile, on_delete=models.CASCADE, related_name='assignments')
-    assigned_class = models.ForeignKey(Classroom, on_delete=models.CASCADE, related_name='assignments', null=True, blank=True)
+    joined_classes = models.ForeignKey(Classroom, on_delete=models.CASCADE, related_name='assignments', null=True, blank=True)
+    plagiarism_active = models.BooleanField(default=False) 
 
     def __str__(self):
-        return f"{self.title} ({self.assigned_class.name if self.assigned_class else 'No Class'})"
+        return f"{self.title} ({self.joined_classes.name if self.joined_classes else 'No Class'})"
 
 # Submission Model
 class Submission(models.Model):
@@ -119,6 +120,7 @@ class Submission(models.Model):
     assignment = models.ForeignKey(Assignment, on_delete=models.CASCADE, related_name='submissions')
     file = models.FileField(upload_to='submissions/')
     submitted_at = models.DateTimeField(default=timezone.now)
+    content = models.TextField(blank=True, null=True)
     plagiarism_score = models.FloatField(default=0.0)
     is_late = models.BooleanField(default=False)
     grade = models.FloatField(blank=True, null=True)
