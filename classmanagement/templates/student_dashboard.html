@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Student Dashboard{% endblock %}
 {% block content %}
+
 <div class="container">
     <h2 class="text-center">Student Dashboard</h2>
 
@@ -9,12 +10,43 @@
         <a href="{% url 'student_profile' %}" class="btn btn-success">My Profile</a>
     </div>
 
-    <!-- Progress Chart -->
-    <h3 class="mt-4">Your Performance Over Time</h3>
-    <canvas id="progressChart"></canvas>
+    <!-- ✅ Grades Table -->
+    <h3 class="mt-4">Your Submitted Assignments & Grades</h3>
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Assignment</th>
+                <th>Marks</th>
+                <th>Grade</th>
+                <th>Feedback</th>
+                <th>Progress</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for submission in submissions %}
+            <tr>
+                <td>{{ submission.assignment.title }}</td>
+                <td>{{ submission.total_marks }}</td>
+                <td>{{ submission.grade }}</td>
+                <td>{{ submission.feedback }}</td>
+                <td>
+                    <a href="{% url 'progress_chart' submission.assignment.title %}" class="btn btn-primary">
+                        View Progress
+                    </a>
+                </td>
+                
+                
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5">No assignments submitted yet.</td>  <!-- Fixed colspan -->
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 
-    <!-- Top 3 Best Performers -->
-    <h3 class="mt-4">Top 3 Best Performers</h3>
+    <!-- ✅ Top 3 Best Performers -->
+    <h3 class="mt-4">Top 3 Best Performers in Class</h3>
     <table class="table table-bordered">
         <thead>
             <tr>
@@ -27,159 +59,83 @@
             {% for student in top_performers %}
             <tr>
                 <td>{{ forloop.counter }}</td>
-                <td>{{ student.student.get_full_name }}</td>
+                <td>{{ student.student_name }}</td>
                 <td>{{ student.overall_score }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="3">No data available.</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
-
-    <!-- Fireworks Celebration for Top 3 Performers -->
-    {% if student_rank == 1 or student_rank == 2 or student_rank == 3 %}
-    <div id="celebration-container">
-        <h2 class="congrats-text">🎉 Congratulations! You're {{ student_rank }}{% if student_rank == 1 %}st{% elif student_rank == 2 %}nd{% else %}rd{% endif %}! 🎉</h2>
-        <canvas id="fireworks"></canvas>
-        <audio id="fireworkSound" src="https://www.soundjay.com/explosion/explosion-01.mp3"></audio>
-    </div>
-    {% endif %}
 </div>
 
-<!-- JSON-Safe Chart Data -->
-<script id="chart-data" type="application/json">{{ labels|safe }}</script>
-<script id="chart-scores" type="application/json">{{ scores|safe }}</script>
 
-<!-- Chart.js for Progress Chart -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-document.addEventListener("DOMContentLoaded", function () {
-    var labels = JSON.parse(document.getElementById("chart-data").textContent);
-    var scores = JSON.parse(document.getElementById("chart-scores").textContent);
-
-    var ctx = document.getElementById('progressChart').getContext('2d');
-    var progressChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'Performance Score',
-                data: scores,
-                borderColor: 'blue',
-                backgroundColor: 'rgba(0, 0, 255, 0.1)',
-                borderWidth: 2,
-                fill: true
-            }]
-        },
-        options: {
-            responsive: true,
-            scales: {
-                y: {
-                    beginAtZero: true
+    document.addEventListener("DOMContentLoaded", function () {
+        const studentPerformance = JSON.parse('{{ student_performance_json|escapejs }}');
+        const avgClassPerformance = JSON.parse('{{ avg_class_performance_json|escapejs }}');
+    
+        document.querySelectorAll(".view-progress").forEach(button => {
+            button.addEventListener("click", function () {
+                // Close any open charts first
+                document.querySelectorAll(".progress-chart-container").forEach(div => {
+                    div.style.display = "none";
+                });
+    
+                // Find the relevant div & canvas
+                const chartContainer = this.nextElementSibling;
+                const canvas = chartContainer.querySelector(".progress-chart");
+                chartContainer.style.display = "block";
+    
+                // Get assignment data
+                const assignment = this.dataset.assignment;
+                const studentMarks = studentPerformance.find(s => s.assignment === assignment)?.marks || 0;
+                const classAvg = avgClassPerformance[assignment] || 0;
+    
+                // Destroy previous chart if exists
+                if (canvas.chartInstance) {
+                    canvas.chartInstance.destroy();
                 }
-            }
-        }
-    });
-});
-</script>
-
-<!-- Fireworks Celebration JS -->
-{% if student_rank == 1 or student_rank == 2 or student_rank == 3 %}
-<script>
-document.addEventListener("DOMContentLoaded", function () {
-    if (document.getElementById("celebration-container")) {
-        startFireworks();
-    }
-});
-
-function startFireworks() {
-    const canvas = document.getElementById("fireworks");
-    const ctx = canvas.getContext("2d");
-
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-
-    const fireworks = [];
-    const fireworkSound = document.getElementById("fireworkSound");
-
-    function Firework(x, y) {
-        this.x = x;
-        this.y = y;
-        this.color = `hsl(${Math.random() * 360}, 100%, 50%)`;
-        this.size = Math.random() * 5 + 2;
-        this.speed = Math.random() * 5 + 2;
-        this.gravity = 0.2;
-        this.alpha = 1;
-
-        this.update = function () {
-            this.y -= this.speed;
-            this.speed -= this.gravity;
-            this.alpha -= 0.02;
-        };
-
-        this.draw = function () {
-            ctx.globalAlpha = this.alpha;
-            ctx.fillStyle = this.color;
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-            ctx.fill();
-        };
-    }
-
-    function explode(x, y) {
-        for (let i = 0; i < 50; i++) {
-            fireworks.push(new Firework(x, y));
-        }
-        fireworkSound.play();
-    }
-
-    function animate() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        fireworks.forEach((firework, index) => {
-            firework.update();
-            firework.draw();
-            if (firework.alpha <= 0) fireworks.splice(index, 1);
+    
+                // Create a new chart
+                const ctx = canvas.getContext('2d');
+                canvas.chartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: [assignment], 
+                        datasets: [
+                            {
+                                label: 'Your Marks',
+                                data: [studentMarks],
+                                borderColor: 'blue',
+                                backgroundColor: 'rgba(0, 0, 255, 0.1)',
+                                borderWidth: 2,
+                                fill: true
+                            },
+                            {
+                                label: 'Class Average',
+                                data: [classAvg],
+                                borderColor: 'red',
+                                backgroundColor: 'rgba(255, 0, 0, 0.1)',
+                                borderWidth: 2,
+                                fill: true
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            });
         });
-
-        requestAnimationFrame(animate);
-    }
-
-    setInterval(() => {
-        explode(Math.random() * canvas.width, Math.random() * canvas.height * 0.5);
-    }, 1000);
-
-    animate();
-}
-</script>
-{% endif %}
-
-<!-- Fireworks Celebration CSS -->
-<style>
-#celebration-container {
-    position: fixed;
-    top: 20%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    text-align: center;
-    background: rgba(0, 0, 0, 0.8);
-    color: white;
-    padding: 20px;
-    border-radius: 10px;
-    z-index: 1000;
-}
-
-.congrats-text {
-    font-size: 24px;
-    font-weight: bold;
-}
-
-#fireworks {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    pointer-events: none;
-    z-index: 999;
-}
-</style>
-
+    });
+    </script>
+    
 {% endblock %}

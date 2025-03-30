@@ -27,10 +27,9 @@ urlpatterns = [
     path('assignments/grade/<int:assignment_id>/', views.grade_assignment, name='grade_assignment'),
 
     # Performance & Queries
-    path('student/performance/', views.student_performance, name='student_performance'),
-    path('student-progress/<int:student_id>/', views.student_progress, name='student_progress'),
-    path('classroom/<int:class_id>/query/', views.query_view, name='class_query'),
-
+    path('progress/<str:assignment_title>/', views.progress_view, name='progress_chart'),
+    path("private-chat/<int:teacher_id>/<int:student_id>/", views.query1to1_view, name="private_query"),
+    path("classroom-chat/<int:class_id>/", views.queryclassroom_view, name="class_query"),
 
     # Class & Teacher Management
     path('teacher/add/', views.add_teacher, name='add_teacher'),
@@ -40,13 +39,15 @@ urlpatterns = [
     path('student/join-class/', views.join_class, name='join_class'),
     path("delete_class/<int:class_id>/", views.delete_class, name="delete_class"),
     path('get_teacher_classes/', views.get_teacher_classes, name='get_teacher_classes'),
-    path('teacher/plagiarism_check/<int:assignment_id>/', views.plagiarism_check, name='plagiarism_check'),
 
     # Notifications
     path('notifications/send/', views.send_notifications, name='send_notifications'),
     
     #dashboard
-    path("teacher/dashboard/<int:class_id>/", views.teacher_dashboard, name="teacher_dashboard"),
-    path("student/dashboard/<int:class_id>/", views.student_dashboard, name="student_dashboard"),
 
+    path("teacher/dashboard/", views.teacher_dashboard, name="teacher_dashboard"),
+    path("teacher/dashboard/<int:class_id>/", views.teacher_dashboard, name="teacher_dashboard"),
+    path("student/dashboard/", views.student_dashboard, name="student_dashboard"),
+    path("student/dashboard/<int:class_id>/", views.student_dashboard, name="student_dashboard"),
+    path('admin/dashboard/', views.admin_dashboard, name='admin_dashboard'),
 ]    

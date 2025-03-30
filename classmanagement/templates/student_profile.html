@@ -85,29 +85,41 @@
                         <div class="accordion accordion-flush" id="classesAccordion">
 
                             {% for classroom in joined_classes %}
-                                <div class="accordion-item mb-3 border rounded-3">
-                                    <h2 class="accordion-header" id="heading{{ forloop.counter }}">
-                                        <button class="accordion-button collapsed fw-medium" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ forloop.counter }}">
-                                            {{ classroom.name }}
-                                        </button>
-                                    </h2>
+                            <div class="accordion-item mb-3 border rounded-3">
+                                <h2 class="accordion-header" id="heading{{ forloop.counter }}">
+                                    <button class="accordion-button collapsed fw-medium" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ forloop.counter }}">
+                                        {{ classroom.name }}
+                                    </button>
+                                </h2>
 
-                                    <div id="collapse{{ forloop.counter }}" class="accordion-collapse collapse" data-bs-parent="#classesAccordion">
-                                        <div class="accordion-body">
+                                <div id="collapse{{ forloop.counter }}" class="accordion-collapse collapse" data-bs-parent="#classesAccordion">
+                                    <div class="accordion-body">
 
-                                            <!-- Teachers List -->
-                                            <h6 class="fw-semibold">Teacher:</h6>
-                                            <ul class="list-group list-group-flush mb-3">
-                                                <li class="list-group-item small">
-                                                    {{ classroom.teacher.teacher.get_full_name }} 
-                                                </li>
-                                            </ul>
+                                        <!-- Teachers List -->
+                                        <h6 class="fw-semibold">Teacher:</h6>
+                                        <ul class="list-group list-group-flush mb-3">
+                                            <li class="list-group-item small">
+                                                {{ classroom.teacher.teacher.get_full_name }} 
+                                            </li>
+                                        </ul>
 
-                                            <!-- Query Button -->
+                                        <!-- Query Buttons -->
+                                        <div class="d-flex gap-2">
+                                            <!-- 1:1 Private Chat Button -->
+                                            {% if teacher_id and student_id %}
+                                                <a href="{% url 'private_query' teacher_id=teacher_id student_id=student_id %}" class="btn btn-primary">
+                                                    Private Chat
+                                                </a>
+                                            {% else %}
+                                                <p class="text-danger">Private chat unavailable.</p>
+                                            {% endif %}
+
+                                            <!-- 1:N Classroom Chat Button -->
                                             <a href="{% url 'class_query' class_id=classroom.id %}" class="btn btn-primary btn-sm">
-                                                Ask a Query
+                                                Class Chat
                                             </a>
-
+                                        </div>
+                                        
                                             <!-- Assignments List -->
                                             <h6 class="fw-semibold">Assignments:</h6>
                                             {% if classroom.assignments.all %}

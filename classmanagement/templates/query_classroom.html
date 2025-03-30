@@ -26,27 +26,21 @@
     const sender_id = "{{ request.user.id }}";
     const sender_name = "{{ request.user.first_name }}";
     
-    const chatSocket = new WebSocket(`ws://${window.location.host}/ws/query/${class_id}/`);
+    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+    const chatSocket = new WebSocket(`${protocol}://${window.location.host}/ws/query/${class_id}/`);
 
     chatSocket.onmessage = function(e) {
         const data = JSON.parse(e.data);
-        const chatBox = document.getElementById('chat-box');
-
-        // Load past messages on connection
-        if (data.past_messages) {
-            data.past_messages.forEach(msg => {
-                displayMessage(msg.sender, msg.message);
-            });
-        } else {
-            displayMessage(data.sender, data.message);
-        }
+        displayMessage(data.sender, data.message);
     };
 
     function displayMessage(sender, message) {
         const chatBox = document.getElementById('chat-box');
         const messageElement = document.createElement("div");
         messageElement.classList.add("p-2", "mb-2", "rounded");
-        messageElement.style.backgroundColor = "#e9ecef";
+
+        messageElement.style.backgroundColor = sender === sender_name ? "#d4edda" : "#e9ecef";
+        messageElement.style.textAlign = sender === sender_name ? "right" : "left";
 
         messageElement.innerHTML = `<strong>${sender}:</strong> ${message}`;
         chatBox.appendChild(messageElement);
@@ -57,7 +51,7 @@
         const messageInput = document.getElementById('chat-message-input');
         const message = messageInput.value.trim();
         if (message) {
-            chatSocket.send(JSON.stringify({ "message": message, "sender_id": sender_id }));
+            chatSocket.send(JSON.stringify({ "message": message }));
             messageInput.value = '';
         }
     };

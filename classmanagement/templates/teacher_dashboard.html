@@ -1,10 +1,10 @@
+{% endblock %}
+
 {% extends "base.html" %}
 {% block title %}Teacher Dashboard{% endblock %}
 {% block content %}
 
 <div class="container">
-
-    <!-- Profile & Logout Buttons -->
     <div class="d-flex justify-content-end mt-3">
         <a href="{% url 'teacher_profile' %}" class="btn btn-primary me-2">
             <i class="fas fa-user"></i> Profile
@@ -59,7 +59,6 @@
             {% endfor %}
         </tbody>
     </table>
-
 </div>
 
 {% endblock %}

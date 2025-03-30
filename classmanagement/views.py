@@ -1,24 +1,24 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
-from io import BytesIO
-from django.utils import timezone
 from django.contrib.auth import authenticate, login, logout, get_user_model
 from django.core.mail import send_mail
-from collections import Counter
 import nltk
-import string
-from nltk.corpus import stopwords
+import PyPDF2
+import docx
+import logging
+import json
+from django.db import models
+from collections import defaultdict
+from textblob import TextBlob
+from difflib import SequenceMatcher
 from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
 from django.http import JsonResponse
 from django.db.models import Q
 from django.core.paginator import Paginator
 from .models import (CustomUser, Classroom, Assignment, Submission,Performance,  StudentProfile, TeacherProfile)
-from .forms import (UserRegistrationForm, AssignmentForm, SubmissionForm,LoginForm, ClassForm,StudentProfileForm)
-from PyPDF2 import PdfReader
-from docx import Document
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+from .forms import ( AssignmentForm, SubmissionForm, ClassForm,StudentProfileForm)
 from .notifications import notify_teacher_and_student  # Ensure this function exists
 User = get_user_model()
 
@@ -217,112 +217,105 @@ def student_profile(request):
     teachers = TeacherProfile.objects.filter(classrooms__in=joined_classes).distinct()
     performance, _ = Performance.objects.get_or_create(student=student_profile)
 
+    classroom = joined_classes.first() if joined_classes.exists() else None
+    teacher = teachers.first()  # Get the first teacher if multiple exist
+
+    teacher_id = teacher.teacher.id if teacher else None  # ✅ Get correct teacher ID
+    student_id = student_profile.student.id if student_profile else None  # ✅ Get correct student ID
+
     context = {
         'student_profile': student_profile,
         'joined_classes': joined_classes,
         'assignments': assignments,
         'teachers': teachers,
         'performance': performance,
-        'form': form
+        'form': form,
+        'classroom': classroom,
+        'teacher_id': teacher_id,
+        'student_id': student_id,
     }
 
     return render(request, 'student_profile.html', context)
 
+
 @login_required
-@user_passes_test(is_teacher)
-def teacher_dashboard(request, class_id):
-    teacher_profile, created = TeacherProfile.objects.get_or_create(teacher=request.user)
+def teacher_dashboard(request):
+    """Teacher's Dashboard: Displays student performance for selected class."""
+    teacher = request.user.teacherprofile  
+    classes = Classroom.objects.filter(teacher=teacher)  # Get all teacher's classes
 
-    # ✅ All classes by this teacher
-    classes = Classroom.objects.filter(teacher=teacher_profile)
+    # ✅ Get class from GET request, default to first class
+    class_id = request.GET.get('class_id')
+    current_class = get_object_or_404(Classroom, id=class_id) if class_id else classes.first()
 
-    # ✅ Get current classroom or redirect
-    try:
-        classroom = Classroom.objects.get(id=class_id, teacher=teacher_profile)
-    except Classroom.DoesNotExist:
-        messages.error(request, "Classroom not found.")
-        return redirect('teacher_dashboard', class_id=classes.first().id if classes.exists() else None)
+    # ✅ Get students, assignments, and submissions for this class
+    students = StudentProfile.objects.filter(joined_classes=current_class)
+    assignments = Assignment.objects.filter(joined_classes=current_class)
+    submissions = Submission.objects.filter(student__joined_classes=current_class)
 
-    # ✅ Assignments and submissions for this classroom
-    assignments = Assignment.objects.filter(teacher=teacher_profile, joined_classes=classroom)
-    submissions = Submission.objects.filter(assignment__teacher=teacher_profile, assignment__joined_classes=classroom)
+    # ✅ Collect performance data for line chart
+    performance_data = defaultdict(list)
+    for submission in submissions:
+        performance_data[submission.student.student.email].append({
+            "assignment": submission.assignment.title,
+            "marks": submission.total_marks,
+            "date": submission.submitted_at.strftime('%Y-%m-%d')
+        })
 
-    query = request.GET.get('q')
-
-    # ✅ Students who joined any of this teacher's classes
-    students = StudentProfile.objects.filter(joined_classes__in=classes).distinct()
-
-    if query:
-        students = students.filter(
-            Q(name__icontains=query) |
-            Q(student__email__icontains=query)
-        )
-
-    paginator = Paginator(students, 10)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-
-    # ✅ Queries from students in the current classroom
-    #queries = Query.objects.filter(student__joined_classes=classroom).filter(answer__isnull=False).exclude(answer="")
-
-    # ✅ Top students by performance in this classroom
-    top_students = Performance.objects.filter(student__joined_classes=classroom).order_by('-average_score')[:3]
+    # ✅ Get top 3 students based on performance
+    top_students = Performance.objects.filter(student__joined_classes=current_class).order_by('-average_score')[:3]
 
     return render(request, 'teacher_dashboard.html', {
         'classes': classes,
+        'current_class': current_class,
+        'students': students,
         'assignments': assignments,
-        'submissions': submissions,
-        'page_obj': page_obj,
-        'top_students': top_students,
-        'current_classroom': classroom
+        'performance_data': dict(performance_data),
+        'top_students': top_students
     })
 
 
+
 @login_required
-@user_passes_test(is_student)
-def student_dashboard(request, class_id=None):
-    student = request.user
-    student_profile = get_object_or_404(StudentProfile, student=student)
+def student_dashboard(request,class_id =None):
+    """Student's Dashboard: Shows personal & class performance trends."""
+    student = get_object_or_404(StudentProfile, student=request.user)
+    submissions = Submission.objects.filter(student=student).order_by('-submitted_at')
 
-    # If class_id is passed, use it; otherwise get the first joined_class (optional logic)
-    if class_id:
-        classroom = get_object_or_404(Classroom, id=class_id)
-    else:
-        # Grabbing the first class the student joined
-        classroom = student_profile.joined_classes.first()
+    # ✅ Personal performance trend (line chart data)
+    student_performance = []
+    for s in submissions:
+        student_performance.append({
+            "assignment": s.assignment.title,
+            "marks": s.total_marks,
+            "grade": s.grade,  # ✅ Include grade
+            "feedback": s.feedback          })
 
-    if not classroom:
-        # No class joined yet
-        messages.warning(request, "You haven't joined any classes yet!")
-        return redirect('somewhere_else')  # Update to an appropriate URL
+    # ✅ Class average performance trend
+    all_students = StudentProfile.objects.filter(joined_classes__in=student.joined_classes.all())
+    class_performance = defaultdict(list)
 
-    # ✅ Get assignments assigned to this classroom
-    assignments = Assignment.objects.filter(joined_classes=classroom)
+    for s in all_students:
+        sub = Submission.objects.filter(student=s).order_by('-submitted_at')
+        for subm in sub:
+            class_performance[subm.assignment.title].append(subm.total_marks)
 
-    # ✅ Get student's submissions
-    submissions = Submission.objects.filter(student=student_profile)
+    # ✅ Compute average marks for each assignment (avoid division by zero)
+    avg_class_performance = {assignment: (sum(marks) / len(marks)) if marks else 0 for assignment, marks in class_performance.items()}
 
-    # ✅ Search for other students in the same classroom
-    query = request.GET.get('q')
-    all_students = classroom.joined_students.all()  # related_name='joined_students' in Classroom model
+    # ✅ Get Top 3 performers in the class
+    student_scores = []
+    for s in all_students:
+        total_marks = Submission.objects.filter(student=s).aggregate(total=models.Sum('total_marks'))['total'] or 0
+        student_scores.append({"student_name":f"{s.student.first_name} {s.student.last_name}".strip(), "overall_score": total_marks})
 
-    if query:
-        all_students = all_students.filter(
-            Q(student__username__icontains=query) |
-            Q(student__first_name__icontains=query)
-        )
-
-    # ✅ Paginate the list of students
-    paginator = Paginator(all_students, 10)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
+    top_performers = sorted(student_scores, key=lambda x: x['overall_score'], reverse=True)[:3]
 
     return render(request, 'student_dashboard.html', {
-        'assignments': assignments,
         'submissions': submissions,
-        'classroom': classroom,
-        'page_obj': page_obj,
-        'query': query,
+        'student_performance_json': json.dumps(student_performance),
+        'avg_class_performance_json': json.dumps(avg_class_performance),
+        'top_performers': top_performers
     })
 
 
@@ -630,275 +623,246 @@ def submit_assignment(request, assignment_id):
         'query': query
     })
 
+
 # Ensure NLTK stopwords are downloaded
 nltk.download('stopwords')
 nltk.download('punkt')
 
-# Define plagiarism threshold
-PLAGIARISM_THRESHOLD = 40  # Similarity threshold for plagiarism
+logger = logging.getLogger(__name__)
+PLAGIARISM_THRESHOLD = 50 
 
-
-### 🟢 **Plagiarism Checking System** 🟢
-def plagiarism_check(request, assignment_id):
-    assignment = get_object_or_404(Assignment, id=assignment_id)
-    submissions = Submission.objects.filter(assignment=assignment)
-
-    teacher_keywords = assignment.keywords.split(",")  # Extract teacher-set keywords
-    teacher_email = assignment.teacher.teacher.email
-
-    for submission in submissions:
-        # Extract text from file
-        submission_text = extract_text(submission.file)
-
-        # Get unique keywords and their frequency
-        extracted_keywords = extract_keywords(submission_text)
-
-        # Store extracted content & keywords in the database
-        submission.content = submission_text  # Save extracted text
-        submission.keywords = str(extracted_keywords)  # Save keyword frequency
-        submission.save()
-
-        print(f"Submission {submission.student.student.email}:")
-        print(f"Extracted Keywords: {extracted_keywords}\n")
-
-        # Check for student-to-student plagiarism
-        other_subs = submissions.exclude(id=submission.id)
-        plagiarism_score = check_student_to_student_plagiarism(submission, other_subs, teacher_email)
-
-        print(f"Checked submission {submission.student.student.email}: Plagiarism Score: {plagiarism_score}")
-
-    messages.success(request, "Plagiarism checks complete with keyword extraction!")
-    return redirect('submit_assignment', assignment_id=assignment.id)
-
-
-### 🟢 **Extract Text from Files** 🟢
-def extract_text(file_field):
-    """Detect file type and extract text."""
-    filename = file_field.name.lower()
-
-    if filename.endswith('.pdf'):
-        return extract_text_from_pdf(file_field)
-    elif filename.endswith('.txt'):
-        return extract_text_from_txt(file_field)
-    elif filename.endswith('.docx'):
-        return extract_text_from_docx(file_field)
-    else:
-        print(f"Unsupported file type: {filename}")
+def extract_text(submission):
+    """Extracts text from uploaded file based on its type."""
+    filename = submission.file.name.lower()
+    try:
+        submission.file.open()
+        if filename.endswith('.pdf'):
+            return extract_text_from_pdf(submission.file)
+        elif filename.endswith('.txt'):
+            return extract_text_from_txt(submission.file)
+        elif filename.endswith('.docx'):
+            return extract_text_from_docx(submission.file)
+        else:
+            logger.warning(f"Unsupported file type: {filename}")
+            return ""
+    except Exception as e:
+        logger.error(f"❌ Error extracting text: {e}")
         return ""
+    finally:
+        submission.file.close()
 
-
-def extract_text_from_pdf(file_field):
+def extract_text_from_pdf(pdf_file):
     """Extract text from a PDF file."""
     try:
-        file_field.open()
-        reader = PdfReader(file_field)
-        text = "\n".join([page.extract_text() or "" for page in reader.pages])
-        file_field.close()
-        return text if text.strip() else "No readable text found in PDF."
+        reader = PyPDF2.PdfReader(pdf_file)
+        return " ".join([page.extract_text() for page in reader.pages if page.extract_text()])
     except Exception as e:
-        print(f"PDF Extraction error: {str(e)}")
+        logger.error(f"Error reading PDF: {e}")
         return ""
 
-
-def extract_text_from_txt(file_field):
+def extract_text_from_txt(txt_file):
     """Extract text from a TXT file."""
     try:
-        file_field.open()
-        content = file_field.read().decode('utf-8')  # Convert bytes to string
-        file_field.close()
-        return content
+        return txt_file.read().decode('utf-8')
     except Exception as e:
-        print(f"Error reading TXT file: {e}")
+        logger.error(f"Error reading TXT file: {e}")
         return ""
 
-
-def extract_text_from_docx(file_field):
+def extract_text_from_docx(docx_file):
     """Extract text from a DOCX file."""
     try:
-        file_field.open()
-        doc_file = BytesIO(file_field.read())  # Convert to BytesIO
-        document = Document(doc_file)  # Load DOCX from BytesIO
-        text = "\n".join([paragraph.text for paragraph in document.paragraphs])
-        file_field.close()
-        return text
+        doc = docx.Document(docx_file)
+        return " ".join([para.text for para in doc.paragraphs])
     except Exception as e:
-        print(f"Error reading DOCX file: {e}")
+        logger.error(f"Error reading DOCX file: {e}")
         return ""
 
 
-### 🟢 **Extract Keywords & Count Frequency** 🟢
 def extract_keywords(text):
-    """Extract unique keywords and their frequency from text."""
+    """Extracts keywords from a given text, removing stopwords."""
+    words = word_tokenize(text.lower())
     stop_words = set(stopwords.words('english'))
-    text = text.lower().translate(str.maketrans("", "", string.punctuation))  # Lowercase & remove punctuation
-    words = word_tokenize(text)  # Tokenize words
-    filtered_words = [word for word in words if word not in stop_words and word.isalpha()]  # Remove stopwords & numbers
+    return {word for word in words if word.isalnum() and word not in stop_words}
 
-    keyword_counts = Counter(filtered_words)  # Count keyword frequency
-    return dict(keyword_counts)
+def calculate_keyword_match(student_text, teacher_keywords):
+    """Calculate percentage of teacher's keywords present in student's submission."""
+    teacher_words = set(teacher_keywords.lower().split())
+    student_words = set(word_tokenize(student_text.lower()))
+    matched_keywords = teacher_words.intersection(student_words)
+    match_percentage = (len(matched_keywords) / len(teacher_words) * 100) if teacher_words else 0
+    logger.info(f"🔍 Matched Keywords: {matched_keywords}")
+    return match_percentage, matched_keywords
 
+def calculate_grammar_score(text):
+    """Evaluates grammar and spelling mistakes using TextBlob."""
+    blob = TextBlob(text)
+    num_errors = sum(1 for word in blob.words if word != word.correct()) + len(blob.correct().split()) - len(blob.words)
+    
+    # Assigning scores based on error count
+    if num_errors == 0:
+        return 20  # Perfect grammar
+    elif num_errors <= 3:
+        return 10  # Minor errors
+    else:
+        return 5  # Many errors
 
-### 🟢 **Keyword Matching System** 🟢
-def check_keyword_match(teacher_keywords, extracted_keywords):
-    """Check how many teacher keywords match with extracted student keywords."""
-    teacher_keywords = [kw.strip().lower() for kw in teacher_keywords]
-    student_keywords = set(extracted_keywords.keys())  # Extract unique words
+def calculate_submission_time_score(submission_time, deadline):
+    """Assigns scores based on submission time."""
+    return 20 if submission_time <= deadline else 10  # Deduct for late submissions
 
-    matched = sum(1 for kw in teacher_keywords if kw in student_keywords)
-    total_keywords = len(teacher_keywords)
+def check_student_to_student_plagiarism(submission, other_submissions, teacher_email):
+    """Compares a student's submission with past student submissions to detect plagiarism."""
+    submission_text = submission.submitted_text.strip()
+    if not submission_text:
+        return 0  # No text submitted
 
-    return (matched / total_keywords) * 100 if total_keywords > 0 else 0
+    # Find highest similarity percentage among past submissions
+    highest_similarity = max(
+        SequenceMatcher(None, submission_text, past.submitted_text.strip()).ratio() * 100
+        for past in other_submissions.iterator()
+    ) if other_submissions.exists() else 0
 
-
-### 🟢 **Student-to-Student Plagiarism Check** 🟢
-def check_student_to_student_plagiarism(current_submission, other_submissions, teacher_email):
-    """Check similarity between student submissions using TF-IDF & Cosine Similarity."""
-    current_text = extract_text(current_submission.file)
-
-    other_texts = []
-    for sub in other_submissions:
-        other_text = extract_text(sub.file)
-        if other_text.strip():
-            other_texts.append(other_text)
-
-    if not other_texts:
-        current_submission.plagiarism_score = 0.0
-        current_submission.save()
-        return 0.0
-
-    # Compute TF-IDF vectors
-    vectorizer = TfidfVectorizer().fit_transform([current_text] + other_texts)
-    vectors = vectorizer.toarray()
-
-    # Compute similarity scores
-    similarities = cosine_similarity([vectors[0]], vectors[1:])[0]
-    highest_similarity = max(similarities) * 100 if similarities.size > 0 else 0
-
-    # Save plagiarism score
-    if highest_similarity > 0:
-        current_submission.plagiarism_score = round(highest_similarity, 2)
-        current_submission.save()
-
-    # Notify if plagiarism detected
-    if highest_similarity > PLAGIARISM_THRESHOLD and not current_submission.notified:
-        notify_teacher_and_student(current_submission, teacher_email)
-        current_submission.notified = True
-        current_submission.save()
+    # If similarity crosses threshold, notify teacher and student
+    if highest_similarity >= PLAGIARISM_THRESHOLD:
+        notify_teacher_and_student(submission, teacher_email, highest_similarity)
 
     return highest_similarity
 
-### 🟢 **Notify Teacher & Student** 🟢
-def notify_teacher_and_student(submission, teacher_email):
-    """Send notification if plagiarism is detected."""
-    student_email = submission.student.student.email
-    plagiarism_score = submission.plagiarism_score
-
-    print(f"⚠️ Plagiarism Alert ⚠️")
-    print(f"Student: {student_email}")
-    print(f"Plagiarism Score: {plagiarism_score}%")
-    print(f"Notification sent to: {teacher_email}")
-
-    # Here, you can integrate email notifications if needed
-
-
-def notify_teacher_and_student(submission, teacher_email):
-    subject = "⚠️ Plagiarism Alert: High Similarity Detected!"
+def notify_teacher_and_student(submission, teacher_email, plagiarism_score):
+    """Sends an alert email to the teacher and student about plagiarism detection."""
     message = (
-        f"Hello,\n\n"
-        f"A submission from {submission.student.student.email} has a plagiarism score "
-        f"above {PLAGIARISM_THRESHOLD}%.\n"
-        f"Assignment: {submission.assignment.title}\n"
-        f"Plagiarism Score: {submission.plagiarism_score}%\n\n"
-        f"Please review.\n\n"
-        f"Regards,\nSubmitTech"
+        f"Hello,\n\nA submission from {submission.student.student.email} has a plagiarism score of {plagiarism_score:.2f}%.\n"
+        f"Assignment: {submission.assignment.title}\n\nPlease review it.\n\nBest regards,\nSubmitTech"
     )
+    send_mail(
+        "⚠️ Plagiarism Alert: High Similarity Detected!",
+        message,
+        'noreply@submittech.com',
+        [teacher_email, submission.student.student.email]
+    )
+
+def calculate_total_grade(submission):
+    """Calculates the final grade based on keyword match, grammar, and submission time."""
+    assignment = submission.assignment
+    teacher_keywords = assignment.keywords if assignment.keywords else ""
+
+    # Compute individual scores
+    keyword_match_score, matched_keywords = calculate_keyword_match(submission.submitted_text, teacher_keywords)
+    grammar_score = calculate_grammar_score(submission.submitted_text)
+    submission_time_score = calculate_submission_time_score(submission.submitted_at, assignment.due_date)
+
+    # Calculate total marks
+    total_marks = keyword_match_score * 0.5 + grammar_score + submission_time_score  # Weighting
+    submission.keyword_match = keyword_match_score
+    submission.grammar_score = grammar_score
+    submission.submission_time_score = submission_time_score
+    submission.total_marks = round(total_marks, 2)
+    submission.save()
+
+    logger.info(f"✅ Submission {submission.id} graded: {submission.total_marks} marks.")
+    return total_marks
+
+def assign_grades():
+    """Assigns grades and feedback based on the total marks."""
+    grade_mapping = [
+        (91, "A1", "Outstanding performance! Keep up the hard work."),
+        (81, "A2", "Great job! A little more effort can take you to the top."),
+        (71, "B1", "Impressive work! Keep focusing and improving."),
+        (61, "B2", "You're on the right track! Practice more to excel."),
+        (51, "C1", "Decent effort, but there's room for improvement."),
+        (41, "C2", "You're making progress, but consistent practice is key."),
+        (33, "D", "You need to put in more effort. Study hard."),
+        (0, "E", "Serious attention needed! Seek help and study harder."),
+    ]
+    for submission in Submission.objects.all():
+        # Calculate total marks
+        submission.total_marks = (
+            submission.keyword_match * 0.4 +  # 40% weightage
+            submission.grammar_score * 0.3 +  # 30% weightage
+            (20 if submission.plagiarism_score < 30 else 5)  # 30% weightage
+        )
+
+        # Assign grade based on total marks
+        for threshold, grade, feedback in grade_mapping:
+            if submission.total_marks >= threshold:
+                submission.grade, submission.feedback = grade, feedback
+                break
+        
+        submission.save()
     
-    send_mail(subject, message, 'noreply@submittech.com', [teacher_email])
-    send_mail(subject, message, 'noreply@submittech.com', [submission.student.student.email])
+    return "Grades and feedback assigned successfully."
 
-    print(f"Notifications sent to {teacher_email} and {submission.student.student.email}")
-    print("Notification sent to teacher and student due to high similarity.")
+def send_notifications():
+    """Sends reminder emails to students who haven't submitted their assignments."""
+    pending_students = CustomUser.objects.filter(role="student", submission__isnull=True).distinct()
+    for student in pending_students:
+        send_mail(
+            '⏳ Assignment Reminder',
+            '📌 You have pending assignments. Please submit before the deadline.',
+            'admin@submittech.com',
+            [student.email],
+            fail_silently=True)
 
-def check_plagiarism_and_grade(submission, other_submissions, keywords, teacher_email):
-    
-    results = {}
 
-    submission_text = extract_text_from_pdf(submission.file)
+def progress_view(request, assignment_title):
+    student_profile = get_object_or_404(StudentProfile, student=request.user)
+    assignment = get_object_or_404(Assignment, title=assignment_title)
 
-    extracted_keywords = extract_keywords(submission_text)  # Extract keywords from student text
-    keyword_match = check_keyword_match(keywords, extracted_keywords)
-    results['keyword_match'] = keyword_match
+    # Get the student's marks for this assignment
+    student_submission = Submission.objects.filter(student=student_profile, assignment=assignment).first()
+    student_marks = student_submission.total_marks if student_submission else 0
 
-    plagiarism_score = check_student_to_student_plagiarism(submission, other_submissions, teacher_email)
-    results['plagiarism_score'] = plagiarism_score
+    # Get all students' marks for this assignment (for comparison)
+    all_submissions = Submission.objects.filter(assignment=assignment).select_related('student')
 
-    return results
+    student_marks_list = [
+        {
+            "id": sub.student.student.id,  # ✅ Corrected to access the User's ID
+            "name": sub.student.student.first_name,
+            "marks": sub.total_marks
+        }
+        for sub in all_submissions if sub.student != student_profile  # Exclude self
+    ]
 
+    context = {
+        "assignment_title": assignment.title,
+        "student_marks": student_marks,
+        "student_name": student_profile.name,
+        "student_marks_list": student_marks_list,  # Classmates' data
+    }
+    return render(request, "progress_chart.html", context)
 
 @login_required
-@user_passes_test(is_teacher)
-def grade_assignment(request, assignment_id):  # Add assignment_id here
+def grade_assignment(request, assignment_id):
+    """Grades an assignment manually from the teacher panel."""
     assignment = get_object_or_404(Assignment, id=assignment_id)
-
     if request.method == "POST":
         grade = request.POST.get("grade")
         feedback = request.POST.get("feedback")
-
         submission = Submission.objects.filter(assignment=assignment).first()
         if submission:
-            submission.grade = grade
-            submission.feedback = feedback
+            submission.grade, submission.feedback = grade, feedback
             submission.save()
-            messages.success(request, "Assignment graded successfully!")
+            messages.success(request, "✅ Assignment graded successfully!")
         else:
-            messages.error(request, "No submission found for this assignment.")
-
+            messages.error(request, "⚠️ No submission found for this assignment.")
         return redirect('teacher_dashboard')
-
     return render(request, "grade_assignment.html", {"assignment": assignment})
 
 
-
-#NOTIFICATIONS            
-
-def send_notifications():
-    pending_students = CustomUser.objects.filter(
-        role="student",
-        submission__graded=False
-    ).distinct()
-
-    for student in pending_students:
-        send_mail(
-            'Assignment Reminder',
-            'You have pending assignments. Please submit before the deadline.',
-            'admin@example.com',
-            [student.email],
-            fail_silently=True
-        )
-
-
-
 @login_required
-def student_performance(request):
-    if request.user.role != 'student':  # Ensure only students can access this page
-        return redirect('dashboard')
+def query1to1_view(request, teacher_id, student_id):
+    teacher = get_object_or_404(TeacherProfile, teacher__id=teacher_id)
+    student = get_object_or_404(StudentProfile, student__id=student_id)
 
-    try:
-        performance = Performance.objects.get(student=request.user)
-    except Performance.DoesNotExist:
-        performance = None  # If no performance record exists, set it to None
+    context = {
+        'teacher': teacher,
+        'student': student,
+        'teacher_id': teacher_id,
+        'student_id': student_id,
+    }
+    return render(request, 'query1to1.html', context)  # ✅ Ensure correct template path
 
-    return render(request, 'student_performance.html', {'performance': performance})
-
-@login_required
-@user_passes_test(is_student)
-def student_progress(request):
-    student = request.user
-    performance = Performance.objects.filter(student=student).first()
-
-    return render(request, 'student_progress.html', {'performance': performance})
-
-
-def query_view(request, class_id):
+def queryclassroom_view(request, class_id):
     classroom = get_object_or_404(Classroom, id=class_id)
-    return render(request, 'query.html', {'classroom': classroom})
+    return render(request, "queryclassroom.html", {"classroom": classroom})

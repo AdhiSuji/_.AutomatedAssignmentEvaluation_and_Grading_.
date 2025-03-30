@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Progress Comparison{% endblock %}
+{% block content %}
+
+<div class="container">
+    <h2 class="text-center">Compare Progress for {{ assignment_title }}</h2>
+
+    <!-- Dropdown to Select Classmate -->
+    <div class="mb-3">
+        <label for="compareStudent" class="form-label">Select a classmate to compare with:</label>
+        <select id="compareStudent" class="form-select">
+            <option value="">-- Choose a Student --</option>
+            {% for student in student_marks_list %}
+                <option value="{{ student.id }}" data-marks="{{ student.marks }}">{{ student.name }}</option>
+            {% endfor %}
+        </select>
+        
+    </div>
+
+    <!-- Progress Chart -->
+    <canvas id="progressChart"></canvas>
+
+    <div class="text-center mt-3">
+        <a href="{% url 'student_dashboard' %}" class="btn btn-secondary">Back to Dashboard</a>
+    </div>
+</div>
+
+<!-- Include Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const studentName = "{{ student_name }}";  // Logged-in student's name
+        const studentMarks = {{ student_marks }};  // Logged-in student's marks
+
+        let compareMarks = 0;
+        let compareStudentName = "";
+
+        const ctx = document.getElementById('progressChart').getContext('2d');
+
+        // Create Initial Chart
+        let progressChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ["{{ assignment_title }}"], // Assignment Name
+                datasets: [
+                    {
+                        label: studentName,
+                        data: [studentMarks],
+                        borderColor: 'blue',
+                        backgroundColor: 'rgba(0, 0, 255, 0.1)',
+                        borderWidth: 2,
+                        fill: true
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+
+        // Handle Student Selection
+        document.getElementById("compareStudent").addEventListener("change", function () {
+            const selectedOption = this.options[this.selectedIndex];
+            compareMarks = selectedOption.getAttribute("data-marks");
+            compareStudentName = selectedOption.text;
+
+            // Update Chart with Comparison
+            progressChart.data.datasets[1] = {
+                label: compareStudentName,
+                data: [compareMarks],
+                borderColor: 'red',
+                backgroundColor: 'rgba(255, 0, 0, 0.1)',
+                borderWidth: 2,
+                fill: true
+            };
+
+            progressChart.update();
+        });
+    });
+</script>
+
+{% endblock %}

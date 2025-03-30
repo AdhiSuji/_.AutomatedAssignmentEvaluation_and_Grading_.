@@ -161,15 +161,14 @@ EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'submitech1@gmail.com'
-EMAIL_HOST_PASSWORD = 'Submi_Tech@2025'  # Use environment variable instead
+EMAIL_HOST_PASSWORD = 'Submi_Tech@2025'  
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
 CHANNEL_LAYERS = {
     "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        },
+        "BACKEND": "channels.layers.InMemoryChannelLayer", 
     },
-
+}
 
 CACHES = {
     "default": {
