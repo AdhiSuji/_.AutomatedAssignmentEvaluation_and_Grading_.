@@ -1,39 +1,0 @@
-Basics of Computer Networking
-A computer network is a collection of interconnected devices that share resources and information. These devices can include computers, servers, printers, and other hardware. Networks allow for the efficient exchange of data, enabling various applications such as email, file sharing, and internet browsing.
-Basic Terminologies of Computer Networks
-* Network: A network is a collection of computers and devices that are connected together to enable communication and data exchange.
-* Nodes: Nodes are devices that are connected to a network. These can include computers, Servers, Printers, Routers, Switches, and other devices.
-* Protocol: A protocol is a set of rules and standards that govern how data is transmitted over a network. Examples of protocols include TCP/IP, HTTP, and FTP.
-* Topology: Network topology refers to the physical and logical arrangement of nodes on a network. The common network topologies include bus, star, ring, mesh, and tree.
-* Service Provider Networks: These types of Networks give permission to take Network Capacity and Functionality on lease from the Provider. Service Provider Networks include Wireless Communications, Data Carriers, etc.
-* IP Address: An IP address is a unique numerical identifier that is assigned to every device on a network. IP addresses are used to identify devices and enable communication between them.
-* DNS: The Domain Name System (DNS) is a protocol that is used to translate human-readable domain names (such as www.google.com) into IP addresses that computers can understand.
-* Firewall: A firewall is a security device that is used to monitor and control incoming and outgoing network traffic. Firewalls are used to protect networks from unauthorized access and other security threats.
-
-
-Types of Enterprise Computer Networks
-* LAN: A Local Area Network (LAN) is a network that covers a small area, such as an office or a home. LANs are typically used to connect computers and other devices within a building or a campus.
-* WAN: A Wide Area Network (WAN) is a network that covers a large geographic area, such as a city, country, or even the entire world. WANs are used to connect LANs together and are typically used for long-distance communication.
-* Cloud Networks: Cloud Networks can be visualized with a Wide Area Network (WAN) as they can be hosted on public or private cloud service providers and cloud networks are available if there is a demand. Cloud Networks consist of Virtual Routers, Firewalls, etc.
-Types of Computer Network Architecture
-Computer Network falls under these broad Categories:
-* Client-Server Architecture: Client-Server Architecture is a type of Computer Network Architecture in which Nodes can be Servers or Clients. Here, the server node can manage the Client Node Behaviour.
-* Peer-to-Peer Architecture: In P2P (Peer-to-Peer) Architecture, there is not any concept of a Central Server. Each device is free for working as either client or server.
-Network Topology
-The Network Topology is the layout arrangement of the different devices in a network. Some types of network topologies are:
-* Bus Topology: In bus topology all devices are connected to a single central cable called a bus. Data is sent along this cable and all devices share the same connection. Simple and cheap to set up but if the main cable fails the whole network goes down.
-* Star Topology: In star topology all devices are connected to a central node called hub or switch. The hub controls the flow of data between devices. If one device fails the rest of the network is unaffected. But, if the central hub fails the whole network stops working.
-* Ring Topology: In ring topology devices are connected in a circular loop with each device connected to two others. Data travels in one direction (or sometimes both) passing through each device until it reaches its destination. A failure in one device can affect the whole network.
-* Mesh Topology: In mesh topology every device is connected to every other device in the network. It provides multiple paths for data so if one path fails another can take over.
-* Tree Topology: Tree topology is the combination of star and bus topology. Tree topology is good for organizing large networks and allows for easy expansion.
-* Hybrid Topology: Hybrid topology is the combination of two or more different topologies (like star and mesh). It is flexible and can be customized based on the network's specific needs.
-Why Use Computer Networks?
-Computer network play a important role in modern life. Here are some key benefits of computer networks:
-* Fast and Easy Communication: Networks enable all types of digital communication, like emails, messaging, file sharing, video calls, and streaming.
-* More Storage Space: Suppose if we don't have a cloud storage then we have to store data in physical files that will consume a physical space so computer network provide a storage for storing data.
-* Easier Sharing of Information: Networks make it simpler for users and teams to share resources and information. Teams can collaborate more easily, and users get faster response from network devices.
-Conclusion
-Understanding the basics of computer networking is essential in today's interconnected world. Networks enable the seamless exchange of information, support countless applications, and underpin the functionality of the internet. From different types of networks and their components to protocols and security measures, a solid grasp of these concepts is foundational for anyone working in or with technology. As technology evolves, so too will the complexity and capabilities of computer networks, making continuous learning and adaptation crucial.
-                               Assignment1                           
-
-
