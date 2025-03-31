@@ -2,10 +2,105 @@
 {% block title %}Home{% endblock %}
 
 {% block content %}
-<div class="text-center">
-    <h1>Welcome to the Assignment Submission System</h1>
-    <p> Submit assignments easily and track your progress. </p>
-        <a href="{% url 'login' %}" class="btn btn-primary">Login</a>
-        <a href="{% url 'register' %}" class="btn btn-success">Register</a>
+<style>
+    /* Hero Section */
+    .hero {
+        background: transparent
+        color: black;
+        padding: 60px 20px;
+        border-radius: 10px;
+        text-shadow: 1px 1px 5px rgba(0,0,0,0.3);
+    }
+
+    /* Features */
+    .feature-icon {
+        font-size: 3rem;
+        color:rgb(237, 241, 244);
+    }
+
+    .feature-box {
+        border: 1px solid #ddd;
+        padding: 20px;
+        border-radius: 10px;
+        transition: transform 0.3s ease-in-out;
+        background-color: white;
+    }
+
+    .feature-box:hover {
+        transform: scale(1.05);
+        box-shadow: 0px 4px 8px rgba(0,0,0,0.1);
+    }
+
+    /* Testimonials */
+    .testimonials {
+        background: transparent;
+        padding: 40px;
+        border-radius: 10px;
+        margin-top: 40px;
+    }
+
+    /* Hover Effects */
+    .btn:hover {
+        transform: scale(1.1);
+        transition: 0.3s ease-in-out;
+    }
+</style>
+
+<!-- ✅ Hero Section -->
+<div class="hero text-center">
+    <h1 class="fw-bold">Welcome to SubmitTech</h1>
+    <p class="lead">Submit assignments effortlessly, track progress, and improve performance.</p>
+    <a href="{% url 'login' %}" class="btn btn-light btn-lg">Login</a>
+    <a href="{% url 'register' %}" class="btn btn-dark btn-lg">Register</a>
 </div>
+
+
+<!-- ✅ Features Section -->
+<div class="container mt-5">
+    <h2 class="text-center mb-4">Why Choose Our Platform?</h2>
+    <div class="row">
+        <div class="col-md-4">
+            <div class="feature-box text-center">
+                <i class="fas fa-tasks feature-icon"></i>
+                <h4>Easy Assignment Submission</h4>
+                <p>Upload assignments in seconds and manage deadlines with ease.</p>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="feature-box text-center">
+                <i class="fas fa-chart-line feature-icon"></i>
+                <h4>Track Your Performance</h4>
+                <p>Monitor grades, feedback, and progress over time with detailed analytics.</p>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="feature-box text-center">
+                <i class="fas fa-comments feature-icon"></i>
+                <h4>Instant Feedback</h4>
+                <p>Receive real-time feedback and suggestions from your teachers.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+<!-- ✅ Testimonials -->
+<div class="testimonials text-center">
+    <h3>What Our Users Say</h3>
+    <p><em>"This platform made assignment submissions so simple! No more last-minute rush."</em> - <strong>Student</strong></p>
+    <p><em>"I love the automated grading and plagiarism check feature. A real time-saver!"</em> - <strong>Teacher</strong></p>
+</div>
+
+<!-- ✅ Call to Action -->
+<div class="text-center my-5">
+    <h3>Start Submitting Assignments Today!</h3>
+    <a href="{% url 'register' %}" class="btn btn-lg btn-primary">Get Started</a>
+</div>
+
+<!-- ✅ Footer -->
+<footer class="bg-light text-center py-3">
+    <p class="mb-0">© 2025 Assignment Submission System | <a href="{% url 'privacy_policy' %}">Privacy Policy</a> | <a href="#">Contact Us</a></p>
+</footer>
+
 {% endblock %}

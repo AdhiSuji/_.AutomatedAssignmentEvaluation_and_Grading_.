@@ -36,79 +36,43 @@
                         <img src="{% static 'default_folder/default_teacher.jpg' %}" class="rounded-circle img-thumbnail mb-3" style="width: 150px; height: 150px; object-fit: cover;" alt="Default Pic">
                     {% endif %}
 
-                    <!-- User Name & Username -->
                     <h5 class="fw-bold">{{ request.user.get_full_name|default:request.user.username }}</h5>
                     <p class="text-muted">@{{ request.user.username }}</p>
-
-                    <!-- Bio -->
-                    {% if teacher_profile.bio %}
-                        <p class="small mt-3" id="bioText">{{ teacher_profile.bio }}</p>
-                    {% else %}
-                        <p class="small mt-3 text-muted">No bio added yet.</p>
-                    {% endif %}
-
-                    <!-- Edit & Save Buttons -->
-                    <button id="editProfileBtn" class="btn btn-outline-secondary btn-sm mt-2" onclick="enableEdit()">Edit Profile</button>
-
-                    <!-- Update Profile Form -->
-                    <form id="updateProfileForm" method="POST" enctype="multipart/form-data" class="mt-3" style="display: {% if not teacher_profile.bio and not teacher_profile.profile_pic %}block{% else %}none{% endif %};">
-                        {% csrf_token %}
-
-                        <!-- Profile Pic Upload -->
-                        <div class="form-group mb-2">
-                            {{ form.profile_pic.label_tag }} {{ form.profile_pic }}
-                        </div>
-
-                        <!-- Bio Field -->
-                        <div class="form-group mb-2">
-                            {{ form.bio.label_tag }} {{ form.bio }}
-                        </div>
-
-                        <button type="submit" class="btn btn-primary w-100 mt-2">
-                            Update Profile
-                        </button>
-                    </form>
 
                 </div>
             </div>
         </div>
 
         <!-- Classes and Assignments -->
-            <div class="col-md-8">
+        <div class="col-md-8">
 
-                <!-- Created Classes Section -->
-                <div class="card shadow-sm rounded-4 border-0 mb-4">
-                    <div class="card-body p-4">
-                        <h4 class="fw-semibold mb-4">Your Classes</h4>
+            <!-- Created Classes Section -->
+            <div class="card shadow-sm rounded-4 border-0 mb-4">
+                <div class="card-body p-4">
+                    <h4 class="fw-semibold mb-4">Your Classes</h4>
 
-                        {% if created_classes %}
-                            <div class="accordion accordion-flush" id="teacherClassesAccordion">
+                    {% if created_classes %}
+                        <div class="accordion accordion-flush" id="teacherClassesAccordion">
 
-                                {% for classroom in created_classes %}
-                                    <div class="accordion-item mb-3 border rounded-3">
-                                        <h2 class="accordion-header" id="heading{{ forloop.counter }}">
-                                            <button class="accordion-button collapsed fw-medium" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ forloop.counter }}">
-                                                {{ classroom.name }}
-                                            </button>
-                                        </h2>
+                            {% for classroom in created_classes %}
+                                <div class="accordion-item mb-3 border rounded-3">
+                                    <h2 class="accordion-header" id="heading{{ forloop.counter }}">
+                                        <button class="accordion-button collapsed fw-medium" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ forloop.counter }}">
+                                            {{ classroom.name }}
+                                        </button>
+                                    </h2>
 
-                                        <div id="collapse{{ forloop.counter }}" class="accordion-collapse collapse" data-bs-parent="#teacherClassesAccordion">
-                                            <div class="accordion-body">
+                                    <div id="collapse{{ forloop.counter }}" class="accordion-collapse collapse" data-bs-parent="#teacherClassesAccordion">
+                                        <div class="accordion-body">
 
-                                                <!-- Students List -->
-                                                <h6 class="fw-semibold mb-3">Students Enrolled:</h6>
-                                                {% if classroom.joined_students.exists %}
-                                                    <p class="small text-muted">{{ classroom.joined_students.count }} students enrolled</p> 
-                                                    <a href="{% url 'view_students' classroom.id %}" class="btn btn-primary btn-sm mt-2"> See All Students </a> 
-                                                {% else %}
-                                                    <p class="small text-muted">No students enrolled yet.</p>
-                                                {% endif %}
-
-                                                <a href="{% url 'classroom_queries' classroom.id %}" class="btn btn-success btn-sm mt-3">Ask a Query</a>
-
-
-                                            <!-- Assignments List -->
-                                            <h6 class="fw-semibold">Assignments:</h6>
+                                            <!-- Total Students & Assignments -->
+                                            <div class="d-flex align-items-center">
+                                                <p class="mb-0 me-3"><strong>Total Students:</strong> {{ classroom.joined_students.count }}</p>
+                                                <a href="{% url 'view_students' classroom.id %}" class="btn btn-primary btn-sm">See All Students</a>
+                                            </div>
+                                            
+                                            <!-- Assignments -->
+                                            <h6 class="fw-semibold mt-3">Assignments:</h6>
                                             {% if classroom.assignments.all %}
                                                 <ul class="list-group list-group-flush">
                                                     {% for assignment in classroom.assignments.all %}
@@ -118,19 +82,9 @@
                                                                 <small class="text-muted">Due: {{ assignment.due_date }}</small>
                                                             </div>
                                                             <div>
-                                                                <!-- ✅ View Submissions Button -->
                                                                 <a href="{% url 'view_submissions_by_classroom' classroom.id %}" class="btn btn-outline-primary btn-sm">
-                                                                    View Class Submissions
+                                                                    View Submissions
                                                                 </a>
-                                                                <form method="POST" action="{% url 'plagiarism_check' assignment.id %}">
-                                                                    {% csrf_token %}
-                                                                    {% if assignment.plagiarism_active %}
-                                                                        <button type="submit" class="btn btn-danger btn-sm">End Plagiarism Check</button>
-                                                                    {% else %}
-                                                                        <button type="submit" class="btn btn-success btn-sm">Start Plagiarism Check</button>
-                                                                    {% endif %}
-                                                                </form>
-                                                                
                                                             </div>
                                                         </li>
                                                     {% endfor %}
@@ -138,62 +92,28 @@
                                             {% else %}
                                                 <p class="text-warning small">No assignments created yet.</p>
                                             {% endif %}
-                                            
-                                            <a href="{% url 'give_assignment' classroom.id %}" class="btn btn-outline-primary btn-sm mt-3 w-100">
-                                                Create Assignment
+
+                                            <!-- ✅ Dashboard Button -->
+                                            <a href="{% url 'teacher_dashboard' classroom.id %}" class="btn btn-dark btn-sm mb-3 w-100">
+                                                View Class Dashboard
                                             </a>
 
                                         </div>
                                     </div>
                                 </div>
                             {% endfor %}
-
                         </div>
                     {% else %}
                         <p class="text-danger">You haven't created any classes yet. Create one now!</p>
                     {% endif %}
                 </div>
+                
             </div>
-
+            
         </div>
 
     </div>
 
 </div>
-
-<!-- Modal to Create Class -->
-<div class="modal fade" id="createClassModal" tabindex="-1" aria-labelledby="createClassModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content rounded-4 border-0">
-            <div class="modal-header bg-primary text-white rounded-top-4">
-                <h5 class="modal-title" id="createClassModalLabel">Create a New Class</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body p-4">
-                <form method="POST" action="{% url 'teacher_create_class' %}">
-                    {% csrf_token %}
-                    <div class="form-group mb-3">
-                        <label for="class_name" class="form-label">Class Name:</label>
-                        <input type="text" name="class_name" id="class_name" class="form-control" placeholder="Enter class name" required>
-                    </div>
-
-                    <button type="submit" class="btn btn-primary w-100">
-                        Create Class
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Script -->
-<script>
-// Edit Profile Toggle
-function enableEdit() {
-    const updateForm = document.getElementById('updateProfileForm');
-    updateForm.style.display = 'block';
-    document.getElementById('editProfileBtn').style.display = 'none';
-}
-</script>
 
 {% endblock %}

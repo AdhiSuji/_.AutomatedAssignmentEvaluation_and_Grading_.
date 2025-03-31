@@ -95,6 +95,7 @@ class StudentProfile(models.Model):
 # Classroom Model
 class Classroom(models.Model):
     teacher = models.ForeignKey(TeacherProfile, on_delete=models.CASCADE, related_name='classrooms')
+    students = models.ManyToManyField('StudentProfile', related_name='joined_classes')
     name = models.CharField(max_length=100)
     subject = models.CharField(max_length=100, null=False, default="General") 
     description = models.TextField(blank=True, null=True)

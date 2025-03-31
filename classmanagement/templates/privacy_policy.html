@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block title %}Privacy Policy{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1 class="text-center">Privacy Policy</h1>
+    <p class="text-muted text-center">Effective Date: March 31, 2025</p>
+
+    <section class="mt-4">
+        <h4>1. Introduction</h4>
+        <p>Welcome to SubmitTech. We are committed to protecting your privacy and ensuring that your personal information is handled securely.</p>
+    </section>
+
+    <section class="mt-4">
+        <h4>2. Information We Collect</h4>
+        <p>We collect information such as:</p>
+        <ul>
+            <li><strong>Personal Details:</strong> Name, email address, student/teacher ID.</li>
+            <li><strong>Assignment Submissions:</strong> Uploaded files, submission dates, and grades.</li>
+            <li><strong>Usage Data:</strong> Logins, interaction with assignments, and progress tracking.</li>
+        </ul>
+    </section>
+
+    <section class="mt-4">
+        <h4>3. How We Use Your Information</h4>
+        <p>Your data is used to:</p>
+        <ul>
+            <li>Provide and manage the assignment submission system.</li>
+            <li>Analyze student progress and improve performance tracking.</li>
+            <li>Enhance security and prevent unauthorized access.</li>
+        </ul>
+    </section>
+
+    <section class="mt-4">
+        <h4>4. Data Security</h4>
+        <p>We use encryption and secure servers to protect your data from unauthorized access.</p>
+    </section>
+
+    <section class="mt-4">
+        <h4>5. Contact Us</h4>
+        <p>If you have any questions about this Privacy Policy, please <a href="{% url 'contact_us' %}">contact us</a>.</p>
+    </section>
+</div>
+
+<footer class="bg-light text-center py-3 mt-5">
+    <p class="mb-0">© 2025 SubmitTech | <a href="{% url 'privacy_policy' %}">Privacy Policy</a></p>
+</footer>
+
+{% endblock %}

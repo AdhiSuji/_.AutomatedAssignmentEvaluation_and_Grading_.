@@ -1,23 +1,80 @@
-{% endblock %}
-
 {% extends "base.html" %}
-{% block title %}Teacher Dashboard{% endblock %}
+{% block title %}Teacher{% endblock %}
 {% block content %}
 
 <div class="container">
-    <div class="d-flex justify-content-end mt-3">
-        <a href="{% url 'teacher_profile' %}" class="btn btn-primary me-2">
-            <i class="fas fa-user"></i> Profile
-        </a>
-        <a href="{% url 'logout' %}" class="btn btn-danger">
-            <i class="fas fa-sign-out-alt"></i> Logout
-        </a>
+    <h2 class="text-center">Teacher Dashboard</h2>
+
+    <!-- Profile & Logout Buttons -->
+    <div class="text-end">
+        <a href="{% url 'teacher_profile' %}" class="btn btn-primary me-2">Profile</a>
+        <a href="{% url 'logout' %}" class="btn btn-danger">Logout</a>
     </div>
 
-    <h2 class="text-center mt-4">Teacher Dashboard</h2>
+    <!-- ✅ All Students Performance Table -->
+    <h3 class="mt-4">Student Assignments & Performance</h3>
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Student Name</th>
+                <th>Assignment</th>
+                <th>Submitted On Time</th>
+                <th>Keyword Match (%)</th>
+                <th>Plagiarism Score (%)</th>
+                <th>Total Marks</th>
+                <th>Grade</th>
+                <th>Feedback</th>
+                <th>Progress</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for student in students %}
+            <tr>
+                <td rowspan="{{ submissions|length }}">
+                    <strong>{{ student.user.get_full_name }}</strong>
+                </td>
+                {% for submission in submissions %}
+                    {% if not forloop.first %} <tr> {% endif %}
+                    <td>{{ submission.assignment.title }}</td>
+                    <td>
+                        {% if submission.on_time %}
+                            <span class="text-success fw-bold">✅</span>
+                        {% else %}
+                            <span class="text-danger fw-bold">❌ Late</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">{{ submission.keyword_match|floatformat:2 }}%</td>
+                    <td class="text-center">
+                        {% if submission.plagiarism_score > 50 %}
+                            <span class="text-danger fw-bold">{{ submission.plagiarism_score|floatformat:2 }}%</span>
+                        {% else %}
+                            <span class="text-success fw-bold">{{ submission.plagiarism_score|floatformat:2 }}%</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ submission.total_marks }}</td>
+                    <td>{{ submission.grade }}</td>
+                    <td>{{ submission.feedback }}</td>
+                    <td>
+                        <a href="{% url 'progress_chart' submission.assignment.id %}" class="btn btn-primary">
+                            View Progress
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="9" class="text-center">No submissions available.</td>
+                </tr>
+                {% endfor %}
+            {% empty %}
+            <tr>
+                <td colspan="9" class="text-center">No students have submitted assignments.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 
-    <!-- Top 3 Best Performers -->
-    <h3 class="mt-4">Top 3 Best Performers</h3>
+    <!-- ✅ Top 3 Best Performers -->
+    <h3 class="mt-4">Top 3 Best Performing Students</h3>
     <table class="table table-bordered">
         <thead>
             <tr>
@@ -27,34 +84,15 @@
             </tr>
         </thead>
         <tbody>
-            {% for student in top_performers %}
+            {% for student in top_students %}
             <tr>
                 <td>{{ forloop.counter }}</td>
-                <td><a href="{% url 'student_progress' student.id %}">{{ student.name }}</a></td>
-                <td>{{ student.overall_score }}</td>
+                <td>{{ student.student.user.get_full_name }}</td>
+                <td>{{ student.average_score }}</td>
             </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-
-    <!-- All Students Details -->
-    <h3 class="mt-4">All Students</h3>
-    <table class="table table-striped">
-        <thead>
+            {% empty %}
             <tr>
-                <th>Student Name</th>
-                <th>Performance Score</th>
-                <th>View Progress</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for student in all_students %}
-            <tr>
-                <td><a href="{% url 'student_progress' student.id %}">{{ student.name }}</a></td>
-                <td>{{ student.overall_score }}</td>
-                <td>
-                    <a href="{% url 'student_progress' student.id %}" class="btn btn-info btn-sm">View Progress</a>
-                </td>
+                <td colspan="3">No data available.</td>
             </tr>
             {% endfor %}
         </tbody>

@@ -45,6 +45,32 @@ def profile_view(request):
 def home_view(request):
     return render(request, 'home.html')
 
+def privacy_policy(request):
+    return render(request, 'privacy_policy.html')
+
+from django.shortcuts import render
+from django.core.mail import send_mail
+from django.contrib import messages
+
+def contact_us(request):
+    if request.method == "POST":
+        name = request.POST.get('name')
+        email = request.POST.get('email')
+        message = request.POST.get('message')
+
+        # Sending email (you need to configure email settings in Django)
+        send_mail(
+            f"Contact Form Submission from {name}",
+            message,
+            email,
+            ['submitech1@gmail.com'],  # Replace with your email
+            fail_silently=False,
+        )
+
+        messages.success(request, "Your message has been sent!")
+    
+    return render(request, 'contact_us.html')
+
 # REGISTRATION      
 def register(request):
     if request.method == "POST":
@@ -237,23 +263,34 @@ def student_profile(request):
 
     return render(request, 'student_profile.html', context)
 
-
 @login_required
-def teacher_dashboard(request):
-    """Teacher's Dashboard: Displays student performance for selected class."""
-    teacher = request.user.teacherprofile  
+def teacher_dashboard(request, class_id=None):
+    """Teacher's Dashboard: Displays student performance for a selected class."""
+    teacher = get_object_or_404(TeacherProfile, teacher=request.user)
+
     classes = Classroom.objects.filter(teacher=teacher)  # Get all teacher's classes
 
-    # ✅ Get class from GET request, default to first class
-    class_id = request.GET.get('class_id')
-    current_class = get_object_or_404(Classroom, id=class_id) if class_id else classes.first()
+    # ✅ Ensure `class_id` is an integer
+    class_id = request.GET.get('class_id')  # Get class ID from URL
+    if class_id:
+        current_class = get_object_or_404(Classroom, id=int(class_id))
+    else:
+        current_class = classes.first()  # Default to first class
 
-    # ✅ Get students, assignments, and submissions for this class
-    students = StudentProfile.objects.filter(joined_classes=current_class)
-    assignments = Assignment.objects.filter(joined_classes=current_class)
-    submissions = Submission.objects.filter(student__joined_classes=current_class)
+    # ✅ Ensure class_id is always an integer
+    class_id = current_class.id if current_class else None
 
-    # ✅ Collect performance data for line chart
+    # ✅ Get students in the selected class
+    students = StudentProfile.objects.filter(joined_classes__id=class_id)
+
+    # ✅ Debug: Print retrieved students
+    print("DEBUG: Students in class:", students)  # <-- Check if this prints students in console
+
+    # ✅ Get assignments for this class
+    assignments = Assignment.objects.filter(joined_classes__id=class_id, teacher=teacher)  # ✅ FIXED
+    submissions = Submission.objects.filter(assignment__joined_classes__id=class_id)  # ✅ FIXED
+
+    # ✅ Collect performance data
     performance_data = defaultdict(list)
     for submission in submissions:
         performance_data[submission.student.student.email].append({
@@ -263,17 +300,16 @@ def teacher_dashboard(request):
         })
 
     # ✅ Get top 3 students based on performance
-    top_students = Performance.objects.filter(student__joined_classes=current_class).order_by('-average_score')[:3]
+    top_students = Performance.objects.filter(student__joined_classes__id=class_id).order_by('-average_score')[:3]
 
     return render(request, 'teacher_dashboard.html', {
         'classes': classes,
         'current_class': current_class,
-        'students': students,
+        'students': students,  # ✅ Pass students to template
         'assignments': assignments,
         'performance_data': dict(performance_data),
         'top_students': top_students
     })
-
 
 
 @login_required

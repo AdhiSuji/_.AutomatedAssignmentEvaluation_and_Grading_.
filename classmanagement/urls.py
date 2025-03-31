@@ -6,6 +6,8 @@ from django.conf.urls.static import static
 urlpatterns = [
     # Home Page
     path('', views.home_view, name='home'),
+    path('privacy-policy/', views.privacy_policy, name='privacy_policy'),
+    path('contact-us/', views.contact_us, name='contact_us'),
 
     # Authentication
     path('register/', views.register, name='register'),
