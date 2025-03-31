@@ -9,6 +9,7 @@ import docx
 import logging
 import json
 from django.db import models
+from django.utils.timezone import now
 from collections import defaultdict
 from textblob import TextBlob
 from difflib import SequenceMatcher
@@ -17,10 +18,13 @@ from nltk.corpus import stopwords
 from django.http import JsonResponse
 from django.db.models import Q
 from django.core.paginator import Paginator
-from .models import (CustomUser, Classroom, Assignment, Submission,Performance,  StudentProfile, TeacherProfile)
+from .models import (CustomUser, Classroom, Assignment, Submission,Enrollment, Performance,  StudentProfile, TeacherProfile, PrivateMessage, QueryMessage)
 from .forms import ( AssignmentForm, SubmissionForm, ClassForm,StudentProfileForm)
 from .notifications import notify_teacher_and_student  # Ensure this function exists
 User = get_user_model()
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+
 
 #UTILS             
 
@@ -263,53 +267,93 @@ def student_profile(request):
 
     return render(request, 'student_profile.html', context)
 
+import json
+from django.shortcuts import render, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from .models import TeacherProfile, Classroom, StudentProfile, Assignment, Submission, Performance
+
 @login_required
 def teacher_dashboard(request, class_id=None):
     """Teacher's Dashboard: Displays student performance for a selected class."""
+    
     teacher = get_object_or_404(TeacherProfile, teacher=request.user)
+    
+    # Get all teacher's classes
+    classes = Classroom.objects.filter(teacher=teacher)
 
-    classes = Classroom.objects.filter(teacher=teacher)  # Get all teacher's classes
+    # Get class_id from request, or default to the first class
+    class_id = request.GET.get('class_id')
+    current_class = get_object_or_404(Classroom, id=int(class_id)) if class_id else classes.first()
 
-    # ✅ Ensure `class_id` is an integer
-    class_id = request.GET.get('class_id')  # Get class ID from URL
-    if class_id:
-        current_class = get_object_or_404(Classroom, id=int(class_id))
-    else:
-        current_class = classes.first()  # Default to first class
+    # Get students in the selected class
+    students = StudentProfile.objects.filter(joined_classes__id=current_class.id)
 
-    # ✅ Ensure class_id is always an integer
-    class_id = current_class.id if current_class else None
+    # Get assignments & submissions for this class
+    assignments = Assignment.objects.filter(joined_classes__id=current_class.id, teacher=teacher)
+    submissions = Submission.objects.filter(assignment__joined_classes__id=current_class.id)
 
-    # ✅ Get students in the selected class
-    students = StudentProfile.objects.filter(joined_classes__id=class_id)
+    # Collect performance data
+    performance_data = []
+    student_performance_list = []
+    class_avg_performance = {}
 
-    # ✅ Debug: Print retrieved students
-    print("DEBUG: Students in class:", students)  # <-- Check if this prints students in console
+    for student in students:
+        student_performance = {
+            "student": student,
+            "assignments": [],
+            "average_score": student.performance.average_score if hasattr(student, 'performance') else 0,
+        }
 
-    # ✅ Get assignments for this class
-    assignments = Assignment.objects.filter(joined_classes__id=class_id, teacher=teacher)  # ✅ FIXED
-    submissions = Submission.objects.filter(assignment__joined_classes__id=class_id)  # ✅ FIXED
+        # Fetch submissions for this student
+        student_submissions = submissions.filter(student=student)
+        for submission in student_submissions:
+            student_performance["assignments"].append({
+                "assignment": submission.assignment.title,
+                "marks": submission.total_marks,
+                "on_time": submission.submitted_at,
+                "keyword_match": submission.keyword_match,
+                "plagiarism_score": submission.plagiarism_score,
+                "grade": submission.grade,
+                "feedback": submission.feedback,
+            })
+            # Store data for JSON output
+            student_performance_list.append({
+                "student": student.student.username,  # or student.student.get_full_name() if it's a User object
+                "assignment": submission.assignment.title,
+                "marks": submission.total_marks
+            })
 
-    # ✅ Collect performance data
-    performance_data = defaultdict(list)
-    for submission in submissions:
-        performance_data[submission.student.student.email].append({
-            "assignment": submission.assignment.title,
-            "marks": submission.total_marks,
-            "date": submission.submitted_at.strftime('%Y-%m-%d')
-        })
+            # Compute class average per assignment
+            if submission.assignment.title not in class_avg_performance:
+                class_avg_performance[submission.assignment.title] = []
+            class_avg_performance[submission.assignment.title].append(submission.total_marks)
 
-    # ✅ Get top 3 students based on performance
-    top_students = Performance.objects.filter(student__joined_classes__id=class_id).order_by('-average_score')[:3]
+        performance_data.append(student_performance)
 
+    # Compute class averages
+    for assignment in class_avg_performance:
+        scores = class_avg_performance[assignment]
+        class_avg_performance[assignment] = sum(scores) / len(scores) if scores else 0
+
+    # Get top 3 students based on average score
+    top_students = Performance.objects.filter(student__joined_classes__id=current_class.id).order_by('-average_score')[:3]
+
+    # Convert data to JSON for JavaScript charts
+    student_performance_json = json.dumps(student_performance_list)
+    avg_class_performance_json = json.dumps(class_avg_performance)
+
+    # Render the template
     return render(request, 'teacher_dashboard.html', {
         'classes': classes,
         'current_class': current_class,
-        'students': students,  # ✅ Pass students to template
+        'students': students,
         'assignments': assignments,
-        'performance_data': dict(performance_data),
-        'top_students': top_students
+        'performance_data': performance_data,
+        'top_students': top_students,
+        'student_performance_json': student_performance_json,
+        'avg_class_performance_json': avg_class_performance_json
     })
+
 
 
 @login_required
@@ -885,20 +929,56 @@ def grade_assignment(request, assignment_id):
         return redirect('teacher_dashboard')
     return render(request, "grade_assignment.html", {"assignment": assignment})
 
+@receiver(post_save, sender=Submission)
+def update_student_performance(sender, instance, created, **kwargs):
+    # Ensure performance is updated whenever a submission is saved
+    if created or instance.grade is not None:
+        instance.student.performance.update_performance()
 
 @login_required
 def query1to1_view(request, teacher_id, student_id):
     teacher = get_object_or_404(TeacherProfile, teacher__id=teacher_id)
     student = get_object_or_404(StudentProfile, student__id=student_id)
 
-    context = {
-        'teacher': teacher,
-        'student': student,
-        'teacher_id': teacher_id,
-        'student_id': student_id,
-    }
-    return render(request, 'query1to1.html', context)  # ✅ Ensure correct template path
+    if request.method == "POST":
+        message = request.POST.get("message")
+        if message:
+            PrivateMessage.objects.create(
+                sender=request.user,
+                receiver=teacher.teacher if request.user == student.student else student.student,
+                message=message,
+                timestamp=now()
+            )
+        return redirect("query1to1", teacher_id=teacher_id, student_id=student_id)  # Redirect after saving
 
+    messages = PrivateMessage.objects.filter(
+        sender__in=[teacher.teacher, student.student],
+        receiver__in=[teacher.teacher, student.student]
+    ).order_by("-timestamp")  # Get messages between the two users
+
+    return render(request, "query1to1.html", {"teacher": teacher, "student": student, "messages": messages})
+
+
+@login_required
 def queryclassroom_view(request, class_id):
     classroom = get_object_or_404(Classroom, id=class_id)
-    return render(request, "queryclassroom.html", {"classroom": classroom})
+
+    if request.method == "POST":
+        message = request.POST.get("message")
+        print(f"DEBUG: Received message: {message}")  # ✅ Check if message is received
+
+        if message:  # Ensure message is not empty
+            query = QueryMessage.objects.create(
+                classroom=classroom,
+                sender=request.user,
+                message=message,
+                timestamp=now()
+            )
+            print(f"DEBUG: Query saved: {query}")  # ✅ Check if query is saved
+
+        return redirect("class_query", class_id=class_id)  # Redirect after saving
+
+    queries = QueryMessage.objects.filter(classroom=classroom).order_by("-timestamp")
+    print(f"DEBUG: Queries in DB: {queries}")  # ✅ Check if queries exist
+
+    return render(request, "queryclassroom.html", {"classroom": classroom, "queries": queries})

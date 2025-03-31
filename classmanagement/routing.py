@@ -1,7 +1,6 @@
-from django.urls import path
-from .consumers import ClassQueryConsumer, PrivateQueryConsumer  # ✅ Fix: Correct imports
+from django.urls import re_path
+from classmanagement.consumers import QueryConsumer
 
 websocket_urlpatterns = [
-    path("ws/classroom/<int:class_id>/", ClassQueryConsumer.as_asgi()),  # ✅ Fix: class_id should match consumers.py
-    path("ws/private/<int:teacher_id>/<int:student_id>/", PrivateQueryConsumer.as_asgi()),  # ✅ Fix: Private chat
+    re_path(r"ws/query/(?P<room_name>\w+)/$", QueryConsumer.as_asgi()),
 ]

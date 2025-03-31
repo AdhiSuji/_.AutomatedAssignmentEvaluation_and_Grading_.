@@ -1,7 +1,8 @@
 {% extends "base.html" %}
-{% block title %}Teacher{% endblock %}
-{% block content %}
 
+{% block title %}Teacher Dashboard{% endblock %}
+
+{% block content %}
 <div class="container">
     <h2 class="text-center">Teacher Dashboard</h2>
 
@@ -14,8 +15,8 @@
     <!-- ✅ All Students Performance Table -->
     <h3 class="mt-4">Student Assignments & Performance</h3>
     <table class="table table-bordered">
-        <thead>
-            <tr>
+        <thead class="table-light">
+            <tr class="text-center">
                 <th>Student Name</th>
                 <th>Assignment</th>
                 <th>Submitted On Time</th>
@@ -28,47 +29,53 @@
             </tr>
         </thead>
         <tbody>
-            {% for student in students %}
-            <tr>
-                <td rowspan="{{ submissions|length }}">
-                    <strong>{{ student.user.get_full_name }}</strong>
-                </td>
-                {% for submission in submissions %}
-                    {% if not forloop.first %} <tr> {% endif %}
-                    <td>{{ submission.assignment.title }}</td>
-                    <td>
-                        {% if submission.on_time %}
-                            <span class="text-success fw-bold">✅</span>
-                        {% else %}
-                            <span class="text-danger fw-bold">❌ Late</span>
-                        {% endif %}
-                    </td>
-                    <td class="text-center">{{ submission.keyword_match|floatformat:2 }}%</td>
-                    <td class="text-center">
-                        {% if submission.plagiarism_score > 50 %}
-                            <span class="text-danger fw-bold">{{ submission.plagiarism_score|floatformat:2 }}%</span>
-                        {% else %}
-                            <span class="text-success fw-bold">{{ submission.plagiarism_score|floatformat:2 }}%</span>
-                        {% endif %}
-                    </td>
-                    <td>{{ submission.total_marks }}</td>
-                    <td>{{ submission.grade }}</td>
-                    <td>{{ submission.feedback }}</td>
-                    <td>
-                        <a href="{% url 'progress_chart' submission.assignment.id %}" class="btn btn-primary">
-                            View Progress
-                        </a>
-                    </td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="9" class="text-center">No submissions available.</td>
-                </tr>
-                {% endfor %}
+            {% for student_performance in performance_data %}
+                {% with assignments=student_performance.assignments %}
+                    {% if assignments %}
+                        {% for submission in assignments %}
+                        <tr>
+                            {% if forloop.first %}
+                                <td rowspan="{{ assignments|length }}" class="align-middle text-center fw-bold">
+                                    {{ student_performance.student.student.get_full_name }}
+                                </td>
+                            {% endif %}
+                            <td>{{ submission.assignment }}</td>
+                            <td class="text-center">
+                                {% if submission.on_time %}
+                                    <span class="text-success fw-bold">✅</span>
+                                {% else %}
+                                    <span class="text-danger fw-bold">❌ Late</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">{{ submission.keyword_match|floatformat:2 }}%</td>
+                            <td class="text-center">
+                                {% if submission.plagiarism_score > 50 %}
+                                    <span class="text-danger fw-bold">{{ submission.plagiarism_score|floatformat:2 }}%</span>
+                                {% else %}
+                                    <span class="text-success fw-bold">{{ submission.plagiarism_score|floatformat:2 }}%</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">{{ submission.marks }}</td>
+                            <td class="text-center">{{ submission.grade }}</td>
+                            <td class="text-center">{{ submission.feedback }}</td>
+                            <td class="text-center">
+                                <a href="{% url 'progress_chart' submission.assignment.title %}" class="btn btn-sm btn-primary">
+                                    View 
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td class="text-center fw-bold">{{ student_performance.student.student.get_full_name }}</td>
+                            <td colspan="8" class="text-center">No submissions available.</td>
+                        </tr>
+                    {% endif %}
+                {% endwith %}
             {% empty %}
-            <tr>
-                <td colspan="9" class="text-center">No students have submitted assignments.</td>
-            </tr>
+                <tr>
+                    <td colspan="9" class="text-center">No students have submitted assignments.</td>
+                </tr>
             {% endfor %}
         </tbody>
     </table>
@@ -76,27 +83,88 @@
     <!-- ✅ Top 3 Best Performers -->
     <h3 class="mt-4">Top 3 Best Performing Students</h3>
     <table class="table table-bordered">
-        <thead>
-            <tr>
+        <thead class="table-light">
+            <tr class="text-center">
                 <th>Rank</th>
                 <th>Student Name</th>
-                <th>Overall Score</th>
+                <th>Total Score</th>
             </tr>
         </thead>
         <tbody>
             {% for student in top_students %}
-            <tr>
-                <td>{{ forloop.counter }}</td>
-                <td>{{ student.student.user.get_full_name }}</td>
-                <td>{{ student.average_score }}</td>
-            </tr>
+                <tr class="text-center">
+                    <td>{{ forloop.counter }}</td>
+                    <td>{{ student.student.user.get_full_name }}</td>
+                    <td>{{ student.total_score }}</td>
+                </tr>
             {% empty %}
-            <tr>
-                <td colspan="3">No data available.</td>
-            </tr>
+                <tr>
+                    <td colspan="3" class="text-center">No data available.</td>
+                </tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const studentPerformance = JSON.parse('{{ student_performance_json|escapejs }}');
+        const avgClassPerformance = JSON.parse('{{ avg_class_performance_json|escapejs }}');
+
+        document.querySelectorAll(".view-progress").forEach(button => {
+            button.addEventListener("click", function () {
+                document.querySelectorAll(".progress-chart-container").forEach(div => {
+                    div.style.display = "none";
+                });
+
+                const chartContainer = this.nextElementSibling;
+                const canvas = chartContainer.querySelector(".progress-chart");
+                chartContainer.style.display = "block";
+
+                const assignment = this.dataset.assignment;
+                const studentMarks = studentPerformance.find(s => s.assignment === assignment)?.marks || 0;
+                const classAvg = avgClassPerformance[assignment] || 0;
+
+                if (canvas.chartInstance) {
+                    canvas.chartInstance.destroy();
+                }
+
+                const ctx = canvas.getContext('2d');
+                canvas.chartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: [assignment],
+                        datasets: [
+                            {
+                                label: 'Your Marks',
+                                data: [studentMarks],
+                                borderColor: 'blue',
+                                backgroundColor: 'rgba(0, 0, 255, 0.1)',
+                                borderWidth: 2,
+                                fill: true
+                            },
+                            {
+                                label: 'Class Average',
+                                data: [classAvg],
+                                borderColor: 'red',
+                                backgroundColor: 'rgba(255, 0, 0, 0.1)',
+                                borderWidth: 2,
+                                fill: true
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            });
+        });
+    });
+</script>
 
 {% endblock %}

@@ -92,10 +92,10 @@ class StudentProfile(models.Model):
         return self.student.email
 
 
+
 # Classroom Model
 class Classroom(models.Model):
     teacher = models.ForeignKey(TeacherProfile, on_delete=models.CASCADE, related_name='classrooms')
-    students = models.ManyToManyField('StudentProfile', related_name='joined_classes')
     name = models.CharField(max_length=100)
     subject = models.CharField(max_length=100, null=False, default="General") 
     description = models.TextField(blank=True, null=True)
@@ -103,6 +103,14 @@ class Classroom(models.Model):
 
     def __str__(self):
         return f"{self.name} - {self.teacher.teacher.first_name}"
+
+class Enrollment(models.Model):
+    student = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    classroom = models.ForeignKey(Classroom, on_delete=models.CASCADE)
+    role = models.CharField(max_length=50, choices=[('student', 'Student'), ('teacher', 'Teacher')])
+
+    def __str__(self):
+        return f"{self.student.username} enrolled in {self.classroom.name} as {self.role}"
 
 
 # Assignment Model
@@ -146,14 +154,36 @@ class Performance(models.Model):
     completed_assignments = models.IntegerField(default=0)
 
     def update_performance(self):
+        # Fetch all submissions with a grade for this student
         submissions = Submission.objects.filter(student=self.student, grade__isnull=False)
-        if submissions.exists():
-            GRADE_MAPPING = {(0, 20): 10,    (21, 40): 8,     (41, 60): 5,     (61, 80): 3,(81, 100): 0,}
 
-            grades = [GRADE_MAPPING.get(sub.grade, 0) for sub in submissions if sub.grade]
-            if grades:
-                self.average_score = sum(grades) / len(grades)
-            self.completed_assignments = submissions.count()
+        # Define grade mapping (adjust this as needed)
+        GRADE_MAPPING = {
+            (0, 20): 10,
+            (21, 40): 8,
+            (41, 60): 5,
+            (61, 80): 3,
+            (81, 100): 0
+        }
+
+        grades = []
+
+        # Convert grades using the GRADE_MAPPING
+        for sub in submissions:
+            # Check if the grade is in the correct range, otherwise skip it
+            for score_range, grade in GRADE_MAPPING.items():
+                if score_range[0] <= sub.grade <= score_range[1]:
+                    grades.append(grade)
+                    break
+
+        # If there are grades, calculate average score
+        if grades:
+            self.average_score = sum(grades) / len(grades)
+
+        # Update completed assignments count
+        self.completed_assignments = submissions.count()
+
+        # Save the performance record
         self.save()
 
     def __str__(self):
@@ -182,9 +212,3 @@ class PrivateMessage(models.Model):
     def __str__(self):
         return f"From {self.sender.first_name} to {self.receiver.first_name}: {self.message[:50]}"
 
-class PrivateChat(models.Model):
-    user1 = models.ForeignKey(User, on_delete=models.CASCADE, related_name="private_chats1")
-    user2 = models.ForeignKey(User, on_delete=models.CASCADE, related_name="private_chats2")
-
-    class Meta:
-        unique_together = ('user1', 'user2')  # Ensure each chat is unique
