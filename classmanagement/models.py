@@ -1,19 +1,10 @@
-﻿from django.conf import settings
-from django.db.models.signals import post_save
-from django.dispatch import receiver
-from django.db import models
-from collections import Counter
-from django.contrib.auth import get_user_model
-from django.contrib.auth.models import AbstractUser,  BaseUserManager
+﻿from django.db import models
 from django.utils import timezone
-from difflib import SequenceMatcher
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-import uuid
 from django.utils.timezone import now
-from PyPDF2 import PdfReader
-from docx import Document
-from io import BytesIO
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AbstractUser, BaseUserManager
+import uuid
+
 
 
 # Custom User Manager
@@ -144,52 +135,45 @@ class Submission(models.Model):
     comments = models.TextField(blank=True, null=True)
     word_frequencies = models.JSONField(default=dict)  # Stores word frequency as JSON
 
+    def save(self, *args, **kwargs):
+        """Automatically mark submission as late if submitted after the deadline."""
+        if self.assignment.due_date and self.submitted_at > self.assignment.due_date:
+            self.is_late = True
+        else:
+            self.is_late = False
+
+        super().save(*args, **kwargs)  # ✅ Save the model
+
     def __str__(self):
         return f"{self.student.student.email} - {self.assignment.title}"
 
-# Performance Model
 class Performance(models.Model):
     student = models.OneToOneField(StudentProfile, on_delete=models.CASCADE, related_name='performance')
-    average_score = models.FloatField(default=0.0)
+    total_score = models.FloatField(default=0.0)
     completed_assignments = models.IntegerField(default=0)
 
     def update_performance(self):
-        # Fetch all submissions with a grade for this student
-        submissions = Submission.objects.filter(student=self.student, grade__isnull=False)
+        # Fetch all submissions with valid marks
+        submissions = Submission.objects.filter(student=self.student, total_marks__isnull=False)
 
-        # Define grade mapping (adjust this as needed)
-        GRADE_MAPPING = {
-            (0, 20): 10,
-            (21, 40): 8,
-            (41, 60): 5,
-            (61, 80): 3,
-            (81, 100): 0
-        }
+        print(f"Updating Performance for {self.student.student.email}")  # Debug print
+        print(f"Total Submissions Found: {submissions.count()}")  # Debug print
 
-        grades = []
+        # Get total marks
+        grades = [sub.total_marks for sub in submissions if sub.total_marks is not None]
 
-        # Convert grades using the GRADE_MAPPING
-        for sub in submissions:
-            # Check if the grade is in the correct range, otherwise skip it
-            for score_range, grade in GRADE_MAPPING.items():
-                if score_range[0] <= sub.grade <= score_range[1]:
-                    grades.append(grade)
-                    break
+        print(f"Marks Found: {grades}")  # Debug print
 
-        # If there are grades, calculate average score
-        if grades:
-            self.average_score = sum(grades) / len(grades)
+        # ✅ Calculate total score using actual marks
+        self.total_score = sum(grades)
 
-        # Update completed assignments count
+        # ✅ Update completed assignments count
         self.completed_assignments = submissions.count()
 
-        # Save the performance record
+        # ✅ Save the updated performance record
         self.save()
 
-    def __str__(self):
-        return f"{self.student.student.email} - Avg: {self.average_score}"
-
-
+        print(f"Updated Total Score: {self.total_score}")  # Debug print
 
 User = get_user_model()
 

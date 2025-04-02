@@ -41,12 +41,13 @@
                             {% endif %}
                             <td>{{ submission.assignment }}</td>
                             <td class="text-center">
-                                {% if submission.on_time %}
+                                {% if not submission.is_late %}  {# ✅ Show ✅ if not late #}
                                     <span class="text-success fw-bold">✅</span>
                                 {% else %}
                                     <span class="text-danger fw-bold">❌ Late</span>
                                 {% endif %}
                             </td>
+                            
                             <td class="text-center">{{ submission.keyword_match|floatformat:2 }}%</td>
                             <td class="text-center">
                                 {% if submission.plagiarism_score > 50 %}
@@ -91,11 +92,11 @@
             </tr>
         </thead>
         <tbody>
-            {% for student in top_students %}
+            {% for student in students %}
                 <tr class="text-center">
                     <td>{{ forloop.counter }}</td>
-                    <td>{{ student.student.user.get_full_name }}</td>
-                    <td>{{ student.total_score }}</td>
+                    <td>{{ student.student.get_full_name }}</td>
+                    <td>{{ student.performance.total_score }}</td>
                 </tr>
             {% empty %}
                 <tr>
@@ -104,6 +105,7 @@
             {% endfor %}
         </tbody>
     </table>
+
 </div>
 
 <script>

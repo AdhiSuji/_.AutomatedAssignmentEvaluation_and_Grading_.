@@ -1,29 +1,37 @@
-from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required, user_passes_test
-from django.contrib import messages
-from django.contrib.auth import authenticate, login, logout, get_user_model
-from django.core.mail import send_mail
-import nltk
-import PyPDF2
-import docx
-import logging
+#View Handling & Auth
+from django.shortcuts import render, redirect, get_object_or_404  
+from django.contrib.auth.decorators import login_required, user_passes_test  
+from django.contrib.auth import authenticate, login, logout, get_user_model  
+from django.contrib import messages  
+#Email
+from django.core.mail import send_mail  
+#NLP & Plagiarism
+import nltk  
+from textblob import TextBlob  
+from difflib import SequenceMatcher  
+#File Handling
+import PyPDF2  
+import docx  
+#Logging & JSON
+import logging  
 import json
-from django.db import models
-from django.utils.timezone import now
-from collections import defaultdict
-from textblob import TextBlob
-from difflib import SequenceMatcher
-from nltk.tokenize import word_tokenize
-from nltk.corpus import stopwords
-from django.http import JsonResponse
-from django.db.models import Q
-from django.core.paginator import Paginator
-from .models import (CustomUser, Classroom, Assignment, Submission,Enrollment, Performance,  StudentProfile, TeacherProfile, PrivateMessage, QueryMessage)
-from .forms import ( AssignmentForm, SubmissionForm, ClassForm,StudentProfileForm)
-from .notifications import notify_teacher_and_student  # Ensure this function exists
-User = get_user_model()
-from django.db.models.signals import post_save
-from django.dispatch import receiver
+#Database & Time  
+from django.db import models  
+from django.utils.timezone import now  
+from django.utils import timezone  
+#Data processing
+from collections import defaultdict, Counter 
+#HTTP & Queries 
+from django.http import JsonResponse  
+from django.db.models import Q  
+#Pagination
+from django.core.paginator import Paginator  
+#MOdels & Forms
+from .models import ( CustomUser, Classroom, Assignment, Submission, Enrollment, Performance, StudentProfile, TeacherProfile, PrivateMessage, QueryMessage  )  
+from .forms import ( AssignmentForm, SubmissionForm, ClassForm, StudentProfileForm  )  
+#Notifications 
+from .notifications import notify_teacher_and_student  
+from collections import Counter
 
 
 #UTILS             
@@ -267,32 +275,28 @@ def student_profile(request):
 
     return render(request, 'student_profile.html', context)
 
-import json
-from django.shortcuts import render, get_object_or_404
-from django.contrib.auth.decorators import login_required
-from .models import TeacherProfile, Classroom, StudentProfile, Assignment, Submission, Performance
 
 @login_required
-def teacher_dashboard(request, class_id=None):
+def teacher_dashboard(request, class_id):
     """Teacher's Dashboard: Displays student performance for a selected class."""
     
     teacher = get_object_or_404(TeacherProfile, teacher=request.user)
-    
-    # Get all teacher's classes
+
+    # ✅ Get all classes of this teacher
     classes = Classroom.objects.filter(teacher=teacher)
 
-    # Get class_id from request, or default to the first class
-    class_id = request.GET.get('class_id')
-    current_class = get_object_or_404(Classroom, id=int(class_id)) if class_id else classes.first()
+    # ✅ Fetch the currently selected class
+    current_class = get_object_or_404(Classroom, id=class_id, teacher=teacher)
 
-    # Get students in the selected class
-    students = StudentProfile.objects.filter(joined_classes__id=current_class.id)
+    # ✅ Fetch students in this class
+    students = StudentProfile.objects.filter(joined_classes=current_class)
 
-    # Get assignments & submissions for this class
-    assignments = Assignment.objects.filter(joined_classes__id=current_class.id, teacher=teacher)
-    submissions = Submission.objects.filter(assignment__joined_classes__id=current_class.id)
+    # ✅ Fetch assignments only from this class
+    assignments = Assignment.objects.filter(joined_classes=current_class)
 
-    # Collect performance data
+    # ✅ Fetch submissions only from this class
+    submissions = Submission.objects.filter(assignment__joined_classes=current_class)
+
     performance_data = []
     student_performance_list = []
     class_avg_performance = {}
@@ -301,48 +305,49 @@ def teacher_dashboard(request, class_id=None):
         student_performance = {
             "student": student,
             "assignments": [],
-            "average_score": student.performance.average_score if hasattr(student, 'performance') else 0,
+            "total_score": 0
         }
 
-        # Fetch submissions for this student
+        # ✅ Fetch submissions only for this student in this class
         student_submissions = submissions.filter(student=student)
         for submission in student_submissions:
             student_performance["assignments"].append({
                 "assignment": submission.assignment.title,
                 "marks": submission.total_marks,
-                "on_time": submission.submitted_at,
+                "is_late": submission.is_late,
                 "keyword_match": submission.keyword_match,
                 "plagiarism_score": submission.plagiarism_score,
                 "grade": submission.grade,
                 "feedback": submission.feedback,
             })
-            # Store data for JSON output
+
             student_performance_list.append({
-                "student": student.student.username,  # or student.student.get_full_name() if it's a User object
+                "student": student.student.username,  # Use full name if needed
                 "assignment": submission.assignment.title,
                 "marks": submission.total_marks
             })
 
-            # Compute class average per assignment
+            student_performance["total_score"] += submission.total_marks
+
+            # ✅ Compute class average per assignment
             if submission.assignment.title not in class_avg_performance:
                 class_avg_performance[submission.assignment.title] = []
             class_avg_performance[submission.assignment.title].append(submission.total_marks)
 
         performance_data.append(student_performance)
 
-    # Compute class averages
+    # ✅ Compute class averages
     for assignment in class_avg_performance:
         scores = class_avg_performance[assignment]
         class_avg_performance[assignment] = sum(scores) / len(scores) if scores else 0
 
-    # Get top 3 students based on average score
-    top_students = Performance.objects.filter(student__joined_classes__id=current_class.id).order_by('-average_score')[:3]
+    # ✅ Fetch top 3 students based on performance
+    top_students = Performance.objects.filter(student__joined_classes=current_class).order_by('-total_score')[:3]
 
-    # Convert data to JSON for JavaScript charts
+    # ✅ Convert data to JSON for JavaScript charts
     student_performance_json = json.dumps(student_performance_list)
     avg_class_performance_json = json.dumps(class_avg_performance)
 
-    # Render the template
     return render(request, 'teacher_dashboard.html', {
         'classes': classes,
         'current_class': current_class,
@@ -657,60 +662,15 @@ def view_submissions(request, classroom_id=None, student_id=None):
 
     return render(request, 'view_submissions.html', context)
 
-@login_required
-@user_passes_test(is_student)
-def submit_assignment(request, assignment_id):
-    assignment = get_object_or_404(Assignment, id=assignment_id)
-
-    # Get student's joined classes
-    student_profile = request.user.student_profile
-    student_classes = student_profile.joined_classes.all()
-
-    # Ensure the assignment belongs to a class the student is part of
-    if not assignment.joined_classes in student_classes:
-        messages.error(request, "You are not enrolled in this class.")
-        return redirect('student_dashboard')
-
-    # Fetch assignments for pagination (optional)
-    query = request.GET.get('q')
-    assignments = Assignment.objects.filter(joined_classes__in=student_classes)
-
-    if query:
-        assignments = assignments.filter(title__icontains=query)
-
-    paginator = Paginator(assignments, 10)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-
-    if request.method == 'POST':
-        form = SubmissionForm(request.POST, request.FILES)
-        if form.is_valid():
-            submission = form.save(commit=False)
-            submission.student = student_profile  # ✅ Use StudentProfile
-            submission.assignment = assignment
-            submission.save()
-
-            messages.success(request, 'Assignment submitted successfully!')
-            return redirect('student_dashboard', class_id=assignment.joined_classes.id)
-    else:
-        form = SubmissionForm()
-
-    return render(request, 'submit_assignment.html', {
-        'form': form,
-        'assignment': assignment,
-        'assignments': assignments,
-        'page_obj': page_obj,
-        'query': query
-    })
-
 
 # Ensure NLTK stopwords are downloaded
 nltk.download('stopwords')
 nltk.download('punkt')
 
 logger = logging.getLogger(__name__)
-PLAGIARISM_THRESHOLD = 50 
+PLAGIARISM_THRESHOLD = 50  # Plagiarism detection threshold percentage
 
+# Extract text from the uploaded file
 def extract_text(submission):
     """Extracts text from uploaded file based on its type."""
     filename = submission.file.name.lower()
@@ -757,22 +717,24 @@ def extract_text_from_docx(docx_file):
         logger.error(f"Error reading DOCX file: {e}")
         return ""
 
-
+# Extract keywords from text
 def extract_keywords(text):
     """Extracts keywords from a given text, removing stopwords."""
-    words = word_tokenize(text.lower())
-    stop_words = set(stopwords.words('english'))
+    words = nltk.word_tokenize(text.lower())
+    stop_words = set(nltk.corpus.stopwords.words('english'))
     return {word for word in words if word.isalnum() and word not in stop_words}
 
+# Calculate keyword match percentage
 def calculate_keyword_match(student_text, teacher_keywords):
     """Calculate percentage of teacher's keywords present in student's submission."""
     teacher_words = set(teacher_keywords.lower().split())
-    student_words = set(word_tokenize(student_text.lower()))
+    student_words = set(nltk.word_tokenize(student_text.lower()))
     matched_keywords = teacher_words.intersection(student_words)
     match_percentage = (len(matched_keywords) / len(teacher_words) * 100) if teacher_words else 0
     logger.info(f"🔍 Matched Keywords: {matched_keywords}")
     return match_percentage, matched_keywords
 
+# Calculate grammar score
 def calculate_grammar_score(text):
     """Evaluates grammar and spelling mistakes using TextBlob."""
     blob = TextBlob(text)
@@ -785,29 +747,45 @@ def calculate_grammar_score(text):
         return 10  # Minor errors
     else:
         return 5  # Many errors
+    
 
-def calculate_submission_time_score(submission_time, deadline):
-    """Assigns scores based on submission time."""
-    return 20 if submission_time <= deadline else 10  # Deduct for late submissions
-
+# Check plagiarism between student submissions
 def check_student_to_student_plagiarism(submission, other_submissions, teacher_email):
     """Compares a student's submission with past student submissions to detect plagiarism."""
-    submission_text = submission.submitted_text.strip()
+    
+    # Ensure submission content is a valid string
+    submission_text = submission.content.strip() if submission.content else ""  # ✅ FIX
+
     if not submission_text:
         return 0  # No text submitted
 
-    # Find highest similarity percentage among past submissions
-    highest_similarity = max(
-        SequenceMatcher(None, submission_text, past.submitted_text.strip()).ratio() * 100
-        for past in other_submissions.iterator()
-    ) if other_submissions.exists() else 0
+    highest_similarity = 0
+    for past in other_submissions.iterator():
+        past_text = past.content.strip() if past.content else ""  # ✅ FIX
+        similarity = SequenceMatcher(None, submission_text, past_text).ratio() * 100
+        highest_similarity = max(highest_similarity, similarity)
 
-    # If similarity crosses threshold, notify teacher and student
     if highest_similarity >= PLAGIARISM_THRESHOLD:
         notify_teacher_and_student(submission, teacher_email, highest_similarity)
 
     return highest_similarity
 
+
+
+def calculate_submission_time_score(submission_time, due_date):
+    """Calculates a score based on how early or late the assignment is submitted."""
+    # Ensure the submission time and due date are timezone-aware (if using timezones)
+    if submission_time > due_date:
+        late_duration = submission_time - due_date
+        late_days = late_duration.days
+        # A penalty for late submission, scaling based on the number of late days
+        return max(0, 20 - late_days * 2)  # Deduct 2 marks per day late, minimum 0 score
+    else:
+        # No penalty if submitted before or on time
+        return 20  # Full score if on time
+
+
+# Notify teacher and student in case of plagiarism
 def notify_teacher_and_student(submission, teacher_email, plagiarism_score):
     """Sends an alert email to the teacher and student about plagiarism detection."""
     message = (
@@ -821,14 +799,17 @@ def notify_teacher_and_student(submission, teacher_email, plagiarism_score):
         [teacher_email, submission.student.student.email]
     )
 
+
+
+# Calculate final grade based on various criteria
 def calculate_total_grade(submission):
     """Calculates the final grade based on keyword match, grammar, and submission time."""
     assignment = submission.assignment
     teacher_keywords = assignment.keywords if assignment.keywords else ""
 
     # Compute individual scores
-    keyword_match_score, matched_keywords = calculate_keyword_match(submission.submitted_text, teacher_keywords)
-    grammar_score = calculate_grammar_score(submission.submitted_text)
+    keyword_match_score, matched_keywords = calculate_keyword_match(submission.content, teacher_keywords)
+    grammar_score = calculate_grammar_score(submission.content)
     submission_time_score = calculate_submission_time_score(submission.submitted_at, assignment.due_date)
 
     # Calculate total marks
@@ -842,8 +823,30 @@ def calculate_total_grade(submission):
     logger.info(f"✅ Submission {submission.id} graded: {submission.total_marks} marks.")
     return total_marks
 
-def assign_grades():
-    """Assigns grades and feedback based on the total marks."""
+def assign_grades(submission):
+    """Assigns grades and feedback based on the total marks with/without plagiarism check."""
+    
+    # Default weights
+    keyword_weight = 0.7
+    grammar_weight = 0.2
+    submission_time_weight = 0.1
+    plagiarism_weight = 0
+
+    # If plagiarism check is enabled
+    if submission.plagiarism_score is not None:
+        plagiarism_weight = 0.2
+        keyword_weight = 0.6
+        grammar_weight = 0.1
+
+    # Calculate total marks
+    submission.total_marks = (
+        submission.keyword_match * keyword_weight +  # Keyword Match
+        submission.grammar_score * grammar_weight +  # Grammar Score
+        submission.submission_time_score * submission_time_weight +  # Submission Time
+        (submission.plagiarism_score * plagiarism_weight if plagiarism_weight else 0)  # Plagiarism Score (if available)
+    )
+
+    # Grade thresholds and feedback messages
     grade_mapping = [
         (91, "A1", "Outstanding performance! Keep up the hard work."),
         (81, "A2", "Great job! A little more effort can take you to the top."),
@@ -854,23 +857,20 @@ def assign_grades():
         (33, "D", "You need to put in more effort. Study hard."),
         (0, "E", "Serious attention needed! Seek help and study harder."),
     ]
-    for submission in Submission.objects.all():
-        # Calculate total marks
-        submission.total_marks = (
-            submission.keyword_match * 0.4 +  # 40% weightage
-            submission.grammar_score * 0.3 +  # 30% weightage
-            (20 if submission.plagiarism_score < 30 else 5)  # 30% weightage
-        )
-
-        # Assign grade based on total marks
-        for threshold, grade, feedback in grade_mapping:
-            if submission.total_marks >= threshold:
-                submission.grade, submission.feedback = grade, feedback
-                break
-        
-        submission.save()
     
-    return "Grades and feedback assigned successfully."
+    # Assign grade and feedback based on the calculated total marks
+    for threshold, grade, feedback in grade_mapping:
+        if submission.total_marks >= threshold:
+            submission.grade = grade
+            submission.feedback = feedback
+            break
+
+    # Save the submission after assigning grade and feedback
+    submission.save()
+    
+    return submission  # You can return the submission for further use if necessary
+
+
 
 def send_notifications():
     """Sends reminder emails to students who haven't submitted their assignments."""
@@ -884,56 +884,112 @@ def send_notifications():
             fail_silently=True)
 
 
+
+@login_required
+@user_passes_test(is_student)
+def submit_assignment(request, assignment_id):
+    assignment = get_object_or_404(Assignment, id=assignment_id)
+
+    # Get student's joined classes
+    student_profile = request.user.student_profile
+    student_classes = student_profile.joined_classes.all()
+
+    # Ensure the assignment belongs to a class the student is part of
+    if not assignment.joined_classes in student_classes:
+        messages.error(request, "You are not enrolled in this class.")
+        return redirect('student_dashboard')
+
+    # Fetch assignments for pagination (optional)
+    query = request.GET.get('q')
+    assignments = Assignment.objects.filter(joined_classes__in=student_classes)
+
+    if query:
+        assignments = assignments.filter(title__icontains=query)
+
+    paginator = Paginator(assignments, 10)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    if request.method == 'POST':
+        form = SubmissionForm(request.POST, request.FILES)
+        if form.is_valid():
+            submission = form.save(commit=False)
+            submission.student = student_profile  # ✅ Use StudentProfile
+            submission.assignment = assignment
+            submission.submitted_at = timezone.now()  # ✅ Ensure the timestamp is recorded correctly
+            submission.is_late = submission.check_late_submission() 
+            submission.save()
+
+            submission.check_late_submission()
+
+            # Extract text from the student's submission (ensure this function works correctly)
+            student_text = extract_text(submission)
+            submission.content = student_text
+
+            # Calculate word frequencies
+            word_counts = Counter(student_text.split())  # ✅ Count words
+            submission.word_frequencies = json.dumps(word_counts)  # ✅ Store as JSON
+
+
+            # Fetch teacher email
+            teacher_profile = TeacherProfile.objects.filter(teacher=assignment.teacher).first()
+            teacher_email = teacher_profile.teacher.email if teacher_profile else "admin@submittech.com"
+
+            # Check for plagiarism
+            plagiarism_score = check_student_to_student_plagiarism(submission, Submission.objects.all(), teacher_email)
+            submission.plagiarism_score = plagiarism_score
+
+            # Calculate total marks (You should define this function)
+            total_marks = calculate_total_grade(submission)
+            submission.total_marks = total_marks  # Ensure total_marks is assigned
+
+            # Assign grade based on marks (Ensure this function works correctly)
+            assign_grades(submission)
+
+            submission.save()  # Save the submission after all the updates
+
+            messages.success(request, 'Assignment submitted successfully!')
+            return redirect('student_dashboard', class_id=assignment.joined_classes.id)
+    else:
+        form = SubmissionForm()
+
+    return render(request, 'submit_assignment.html', {
+        'form': form,
+        'assignment': assignment,
+        'assignments': assignments,
+        'page_obj': page_obj,
+        'query': query
+    })
+
+
 def progress_view(request, assignment_title):
+    print("Assignment title received:", assignment_title)  # Debugging output
+
     student_profile = get_object_or_404(StudentProfile, student=request.user)
     assignment = get_object_or_404(Assignment, title=assignment_title)
 
-    # Get the student's marks for this assignment
     student_submission = Submission.objects.filter(student=student_profile, assignment=assignment).first()
     student_marks = student_submission.total_marks if student_submission else 0
 
-    # Get all students' marks for this assignment (for comparison)
     all_submissions = Submission.objects.filter(assignment=assignment).select_related('student')
 
     student_marks_list = [
         {
-            "id": sub.student.student.id,  # ✅ Corrected to access the User's ID
+            "id": sub.student.student.id,
             "name": sub.student.student.first_name,
             "marks": sub.total_marks
         }
-        for sub in all_submissions if sub.student != student_profile  # Exclude self
+        for sub in all_submissions if sub.student != student_profile
     ]
 
     context = {
         "assignment_title": assignment.title,
         "student_marks": student_marks,
         "student_name": student_profile.name,
-        "student_marks_list": student_marks_list,  # Classmates' data
+        "student_marks_list": student_marks_list,
     }
     return render(request, "progress_chart.html", context)
 
-@login_required
-def grade_assignment(request, assignment_id):
-    """Grades an assignment manually from the teacher panel."""
-    assignment = get_object_or_404(Assignment, id=assignment_id)
-    if request.method == "POST":
-        grade = request.POST.get("grade")
-        feedback = request.POST.get("feedback")
-        submission = Submission.objects.filter(assignment=assignment).first()
-        if submission:
-            submission.grade, submission.feedback = grade, feedback
-            submission.save()
-            messages.success(request, "✅ Assignment graded successfully!")
-        else:
-            messages.error(request, "⚠️ No submission found for this assignment.")
-        return redirect('teacher_dashboard')
-    return render(request, "grade_assignment.html", {"assignment": assignment})
-
-@receiver(post_save, sender=Submission)
-def update_student_performance(sender, instance, created, **kwargs):
-    # Ensure performance is updated whenever a submission is saved
-    if created or instance.grade is not None:
-        instance.student.performance.update_performance()
 
 @login_required
 def query1to1_view(request, teacher_id, student_id):
