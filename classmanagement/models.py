@@ -59,7 +59,7 @@ CustomUser = get_user_model()
 class TeacherProfile(models.Model):
     teacher = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='teacher_profile', primary_key=True)
     reference_id = models.CharField(max_length=20, unique=True, null=True, blank=True, editable=False)
-    profile_pic = models.ImageField(upload_to='teacher_profiles/', default='default_folder/default_teacher.jpg')
+    profile_pic = models.ImageField(upload_to='profile_pics/', default='default_folder/default_teacher.jpg')
     bio = models.TextField(blank=True, null=True)
 
     def save(self, *args, **kwargs):
@@ -109,9 +109,11 @@ class Assignment(models.Model):
     title = models.CharField(max_length=255)
     description = models.TextField(default="No description provided.")
     due_date = models.DateTimeField()
-    keywords = models.TextField(blank=True, null=True)
-
     teacher = models.ForeignKey(TeacherProfile, on_delete=models.CASCADE, related_name='assignments')
+    model_answer_file = models.FileField(upload_to='model_answers/', null=True, blank=True)  # .pdf, .docx, .txt
+    extracted_image = models.ImageField(upload_to='extracted_images/', null=True, blank=True)
+    extracted_content = models.TextField(blank=True, null=True)  # Raw text
+    processed_content = models.TextField(blank=True, null=True) 
     joined_classes = models.ForeignKey(Classroom, on_delete=models.CASCADE, related_name='assignments', null=True, blank=True)
     plagiarism_active = models.BooleanField(default=False) 
 
@@ -125,15 +127,18 @@ class Submission(models.Model):
     file = models.FileField(upload_to='submissions/')
     submitted_at = models.DateTimeField(default=timezone.now)
     content = models.TextField(blank=True, null=True)  # Store extracted text
+    preprocessed_content = models.TextField(blank=True, null=True)
+    extracted_images = models.ImageField(upload_to='extracted_student_images/', null=True, blank=True)
+    image_text = models.TextField(null=True, blank=True)
+    text_similarity_score = models.FloatField(blank=True, null=True)  # ✅ score out of 100
+    image_similarity_score = models.FloatField(blank=True, null=True)
     plagiarism_score = models.FloatField(default=0.0)  # Only for student-to-student comparisons
-    keyword_match = models.FloatField(default=0.0)  # Teacher-to-student keyword match percentage
     is_late = models.BooleanField(default=False)
     grammar_score = models.IntegerField(default=0)
     total_marks = models.IntegerField(default=0) 
     grade = models.CharField(max_length=2, blank=True, null=True) 
     feedback = models.TextField(blank=True, null=True)
-    comments = models.TextField(blank=True, null=True)
-    word_frequencies = models.JSONField(default=dict)  # Stores word frequency as JSON
+    comments = models.TextField(blank=False, null=True)
 
     def save(self, *args, **kwargs):
         """Automatically mark submission as late if submitted after the deadline."""

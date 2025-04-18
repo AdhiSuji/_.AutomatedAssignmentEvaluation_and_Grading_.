@@ -26,9 +26,10 @@ urlpatterns = [
     path('teacher/view-submissions/', views.view_submissions, name='view_submissions_all'),
     path('teacher/class/<int:classroom_id>/view-submissions/', views.view_submissions, name='view_submissions_by_classroom'),
     path('teacher/class/<int:classroom_id>/student/<int:student_id>/view-submissions/', views.view_submissions, name='view_submissions_by_student'),
-
+    
     # Performance & Queries
-    path('progress/<str:assignment_title>/', views.progress_view, name='progress_chart'),
+    # urls.py
+    path('student/progress/<int:student_id>/<int:assignment_id>/', views.progress_view, name='progress_chart'),
     path("private-chat/<int:teacher_id>/<int:student_id>/", views.query1to1_view, name="private_query"),
     path("classroom-chat/<int:class_id>/", views.queryclassroom_view, name="class_query"),
 

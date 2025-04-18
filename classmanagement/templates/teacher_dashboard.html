@@ -8,9 +8,10 @@
 
     <!-- Profile & Logout Buttons -->
     <div class="text-end">
-        <a href="{% url 'teacher_profile' %}" class="btn btn-primary me-2">Profile</a>
-        <a href="{% url 'logout' %}" class="btn btn-danger">Logout</a>
+        <a href="{% url 'teacher_profile' %}" class="btn me-2" style="background-color: #6f42c1; color: white;">Profile</a>
+        <a href="{% url 'logout' %}" class="btn" style="background-color: #6f42c1; color: white;">Logout</a>
     </div>
+    
 
     <!-- ✅ All Students Performance Table -->
     <h3 class="mt-4">Student Assignments & Performance</h3>
@@ -20,7 +21,8 @@
                 <th>Student Name</th>
                 <th>Assignment</th>
                 <th>Submitted On Time</th>
-                <th>Keyword Match (%)</th>
+                <th>Text</th>
+                <th>Diagram</th>
                 <th>Plagiarism Score (%)</th>
                 <th>Total Marks</th>
                 <th>Grade</th>
@@ -39,7 +41,7 @@
                                     {{ student_performance.student.student.get_full_name }}
                                 </td>
                             {% endif %}
-                            <td>{{ submission.assignment }}</td>
+                            <td>{{ submission.assignment.title }}</td>
                             <td class="text-center">
                                 {% if not submission.is_late %}  {# ✅ Show ✅ if not late #}
                                     <span class="text-success fw-bold">✅</span>
@@ -47,8 +49,8 @@
                                     <span class="text-danger fw-bold">❌ Late</span>
                                 {% endif %}
                             </td>
-                            
-                            <td class="text-center">{{ submission.keyword_match|floatformat:2 }}%</td>
+                            <td class="text-center">{{ submission.text_similarity_score|floatformat:2 }}%</td>
+                            <td class="text-center">{{ submission.image_similarity_score|floatformat:2 }}%</td>
                             <td class="text-center">
                                 {% if submission.plagiarism_score > 50 %}
                                     <span class="text-danger fw-bold">{{ submission.plagiarism_score|floatformat:2 }}%</span>
@@ -59,11 +61,18 @@
                             <td class="text-center">{{ submission.marks }}</td>
                             <td class="text-center">{{ submission.grade }}</td>
                             <td class="text-center">{{ submission.feedback }}</td>
-                            <td class="text-center">
-                                <a href="{% url 'progress_chart' submission.assignment.title %}" class="btn btn-sm btn-primary">
-                                    View 
-                                </a>
-                            </td>
+                            <td>
+                                {% if submission.assignment and student_performance.student.id %}
+                                <a href="{% url 'progress_chart' student_id=student_performance.student.id assignment_id=submission.assignment.id %}" class="btn btn-primary">
+                                    View
+                                </a>      
+                                <p>Student ID: {{ student_performance.student.id }}</p>
+                                <p>Assignment ID: {{ submission.assignment.id }}</p>
+                          
+                                {% else %}
+                                    <span class="text-muted">N/A</span>
+                                {% endif %}
+                            </td>                            
                         </tr>
                         {% endfor %}
                     {% else %}
@@ -92,11 +101,14 @@
             </tr>
         </thead>
         <tbody>
-            {% for student in students %}
+            {% for student in top_students %}
                 <tr class="text-center">
-                    <td>{{ forloop.counter }}</td>
-                    <td>{{ student.student.get_full_name }}</td>
-                    <td>{{ student.performance.total_score }}</td>
+                    <td>
+                        {% if forloop.counter == 1 %}🥇{% elif forloop.counter == 2 %}🥈{% elif forloop.counter == 3 %}🥉{% endif %}
+                        {{ forloop.counter }}
+                    </td>
+                    <td>{{ student.student.student.get_full_name }}</td>
+                    <td>{{ student.total_score }}</td>
                 </tr>
             {% empty %}
                 <tr>

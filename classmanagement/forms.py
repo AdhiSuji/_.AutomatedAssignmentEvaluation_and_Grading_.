@@ -132,7 +132,7 @@ class StudentProfileForm(forms.Form):
 class AssignmentForm(forms.ModelForm):
     class Meta:
         model = Assignment
-        fields = ['title', 'description', 'due_date', 'keywords']
+        fields = ['title', 'description', 'due_date', 'model_answer_file']
 
     def __init__(self, *args, **kwargs):
         super(AssignmentForm, self).__init__(*args, **kwargs)

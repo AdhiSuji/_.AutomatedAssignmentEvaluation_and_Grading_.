@@ -67,30 +67,7 @@
             <img src="{% static 'image/logo1.jpg' %}" alt="Logo">
             SUBMITECH
         </a>
-        <div class="d-flex align-items-center ms-auto">
-                    {% if user.is_authenticated %}
-                        {% if user.is_staff %}
-                            <a href="{% url 'teacher_profile' %}" class="d-flex align-items-center">
-                                <img src="{{ user.teacherprofile.profile_pic.url }}" 
-                                     alt="Profile" 
-                                     class="rounded-circle" 
-                                     width="40" height="40" 
-                                     style="object-fit: cover;">
-                                <span class="ms-2">{{ user.username }}</span>
-                            </a>
-                        {% else %}
-                            <a href="{% url 'student_profile' %}" class="d-flex align-items-center">
-                                <img src="{{ user.StudentProfile.profile_pic.url }}" 
-                                     alt="Profile" 
-                                     class="rounded-circle" 
-                                     width="40" height="40" 
-                                     style="object-fit: cover;">
-                                <span class="ms-2">{{ user.username }}</span>
-                            </a>
-                        {% endif %}
-                    {% endif %}
-                </div>
-    </div>
+        
 </nav>
 
 <div class="container">

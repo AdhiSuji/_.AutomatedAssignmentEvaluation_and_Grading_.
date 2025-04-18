@@ -27,20 +27,54 @@
     <div class="row">
 
         <!-- Profile Sidebar -->
+       <!-- Profile Sidebar -->
         <div class="col-md-4 mb-4">
             <div class="card shadow-sm rounded-4 border-0">
                 <div class="card-body text-center p-4">
+
                     <!-- Profile Picture -->
                     {% if teacher_profile.profile_pic %}
                         <img src="{{ teacher_profile.profile_pic.url }}" class="rounded-circle img-thumbnail mb-3" style="width: 150px; height: 150px; object-fit: cover;" alt="Profile Pic">
                     {% else %}
                         <img src="{% static 'default_folder/default_teacher.jpg' %}" class="rounded-circle img-thumbnail mb-3" style="width: 150px; height: 150px; object-fit: cover;" alt="Default Pic">
                     {% endif %}
+
+                    <!-- Teacher Name & Username -->
                     <h5 class="fw-bold">{{ request.user.get_full_name|default:request.user.username }}</h5>
-                    <p class="text-muted">@{{ request.user.username }}</p>
+
+                <!-- Bio -->
+                    {% if teacher_profile.bio %}
+                        <p class="small mt-3" id="bioText">{{ teacher_profile.bio }}</p>
+                    {% else %}
+                       <p class="small mt-3 text-muted">No bio added yet.</p>
+                    {% endif %}
+
+                    <!-- Edit Profile Button -->
+                    <button id="editProfileBtn" class="btn btn-outline-secondary btn-sm mt-2" onclick="enableEdit()">Edit Profile</button>
+
+                    <!-- Update Profile Form (hidden initially unless no data) -->
+                    <form id="updateProfileForm" method="POST" enctype="multipart/form-data" class="mt-3" style="display: none;">
+                       {% csrf_token %}
+
+                        <!-- Profile Pic Upload -->
+                        <div class="form-group mb-2">
+                            {{ form.profile_pic.label_tag }} {{ form.profile_pic }}
+                        </div>
+
+                        <!-- Bio Field -->
+                        <div class="form-group mb-2">
+                            {{ form.bio.label_tag }} {{ form.bio }}
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100 mt-2">
+                            Update Profile
+                        </button>
+                    </form>
+
                 </div>
             </div>
         </div>
+
 
         <!-- Classes and Assignments -->
         <div class="col-md-8">
@@ -140,5 +174,17 @@
         </div>
     </div>
 </div>
+
+<script>
+    function enableEdit() {
+        const form = document.getElementById("updateProfileForm");
+        const button = document.getElementById("editProfileBtn");
+        if (form.style.display === "none" || form.style.display === "") {
+            form.style.display = "block";
+            button.style.display = "none";  // hide the button once editing starts
+        }
+    }
+</script>
+
 
 {% endblock %}
