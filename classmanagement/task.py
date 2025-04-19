@@ -11,3 +11,5 @@ def send_async_mail(subject, message, recipient_list):
         fail_silently=False,
     )
     return f"Email sent to {recipient_list}"
+
+

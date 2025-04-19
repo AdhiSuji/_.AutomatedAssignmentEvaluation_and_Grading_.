@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 from pathlib import Path
 import os
+import django_heroku
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -34,6 +35,7 @@ ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
 INSTALLED_APPS = [
     'daphne',
     'channels',
+    'django_celery_results',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -70,6 +72,7 @@ TEMPLATES = [
         },
     },
 ]
+
 
 
 ASGI_APPLICATION = 'AssSubmission.asgi.application'
@@ -145,7 +148,6 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_BACKEND = 'django-db'
 
-INSTALLED_APPS += ['django_celery_results']
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT =os.path.join( BASE_DIR / 'media')
@@ -177,3 +179,8 @@ CACHES = {
         "LOCATION": "redis://127.0.0.1:6379/1",
     }
 }
+
+USE_TZ = True
+TIME_ZONE = 'Asia/Kolkata'  # or your local timezone
+
+django_heroku.settings(locals())

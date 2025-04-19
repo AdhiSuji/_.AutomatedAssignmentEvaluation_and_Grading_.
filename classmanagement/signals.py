@@ -10,3 +10,4 @@ def sync_teacher_reference_id(sender, instance, **kwargs):
             teacher=instance,  # Find the teacher's profile
             defaults={'reference_id': instance.reference_id}  # Update reference_id
         )
+

@@ -31,10 +31,10 @@
                 <td>{{ submission.grade }}</td>
                 <td>{{ submission.feedback }}</td>
                 <td>
-                    <a href="{% url 'progress_chart' submission.assignment.id %}" class="btn btn-primary">
-                        View 
-                    </a>                                        
-                </td>                
+                  <a href="{% url 'progress_chart' student.student.id submission.assignment.id %}" class="btn btn-primary">
+                    View 
+                </a>                                                      
+              </td>                           
             </tr>
             {% empty %}
             <tr>

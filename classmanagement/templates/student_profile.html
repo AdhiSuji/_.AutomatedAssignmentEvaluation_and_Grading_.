@@ -247,4 +247,14 @@ function enableEdit() {
 }
 </script>
 
+<h3>Your Notifications:</h3>
+{% for notification in notifications %}
+    <div class="notification">
+        <p>{{ notification.message }}</p>
+        <small>{{ notification.created_at }}</small>
+        <a href="{% url 'mark_notification_read' notification.id %}">Mark as read</a>
+    </div>
+{% endfor %}
+
+
 {% endblock %}

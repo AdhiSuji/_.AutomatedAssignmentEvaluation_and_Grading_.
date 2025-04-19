@@ -3,27 +3,14 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required, user_passes_test  
 from django.contrib.auth import authenticate, login, logout, get_user_model  
 from django.contrib import messages  
+from .evaluate_submission import evaluate_submission,extract_text_from_pdf, extract_images_from_pdf
+
+
 #Email
 from django.core.mail import send_mail  
-#NLP & Plagiarism
-import nltk  
-from textblob import TextBlob  
-from difflib import SequenceMatcher  
-#File Handling
-import imagehash
-from PIL import Image
-import zipfile
-from PIL import Image
-from io import BytesIO
-import os
-import PyPDF2  
-import docx  
-import fitz
 #Logging & JSON
-import logging  
 import json
 #Database & Time  
-from django.db import models  
 from django.utils.timezone import now  
 from django.utils import timezone  
 #Data processing
@@ -34,7 +21,7 @@ from django.db.models import Q
 #Pagination
 from django.core.paginator import Paginator  
 #MOdels & Forms
-from .models import ( CustomUser, Classroom, Assignment, Submission, Enrollment, Performance, StudentProfile, TeacherProfile, PrivateMessage, QueryMessage  )  
+from .models import ( CustomUser, Classroom, Assignment, Submission, Enrollment, Performance, StudentProfile, TeacherProfile, PrivateMessage, QueryMessage , Notification )  
 from .forms import ( AssignmentForm, SubmissionForm, ClassForm, StudentProfileForm, TeacherProfileForm  )  
 #Notifications 
 from .notifications import notify_teacher_and_student  
@@ -433,6 +420,7 @@ def student_dashboard(request, class_id=None):
         'student_performance_json': json.dumps(student_performance),
         'top_performers': top_performers,
         'current_class': classroom,
+        'student': student_profile, 
     })
 
 
@@ -697,69 +685,6 @@ def view_submissions(request, classroom_id=None, student_id=None):
     return render(request, 'view_submissions.html', context)
 
 
-# Ensure NLTK stopwords are downloaded
-nltk.download('stopwords')
-nltk.download('punkt')
-
-logger = logging.getLogger(__name__)
-PLAGIARISM_THRESHOLD = 50  # Plagiarism detection threshold percentage
-
-import os
-import PyPDF2
-import docx
-import fitz  # PyMuPDF for image extraction
-from uuid import uuid4
-from django.contrib import messages
-from django.shortcuts import render, redirect
-from .forms import AssignmentForm
-from .models import Assignment
-
-# Text extraction functions
-def extract_text(submission):
-    """Extracts text from uploaded file based on its type."""
-    filename = submission.file.name.lower()
-    try:
-        submission.file.open()
-        if filename.endswith('.pdf'):
-            return extract_text_from_pdf(submission.file)
-        elif filename.endswith('.txt'):
-            return extract_text_from_txt(submission.file)
-        elif filename.endswith('.docx'):
-            return extract_text_from_docx(submission.file)
-        else:
-            print(f"Unsupported file type: {filename}")
-            return ""
-    except Exception as e:
-        print(f"❌ Error extracting text: {e}")
-        return ""
-    finally:
-        submission.file.close()
-
-def extract_text_from_pdf(pdf_file):
-    """Extract text from a PDF file."""
-    try:
-        reader = PyPDF2.PdfReader(pdf_file)
-        return " ".join([page.extract_text() for page in reader.pages if page.extract_text()])
-    except Exception as e:
-        print(f"Error reading PDF: {e}")
-        return ""
-
-def extract_text_from_txt(txt_file):
-    """Extract text from a TXT file."""
-    try:
-        return txt_file.read().decode('utf-8')
-    except Exception as e:
-        print(f"Error reading TXT file: {e}")
-        return ""
-
-def extract_text_from_docx(docx_file):
-    """Extract text from a DOCX file."""
-    try:
-        doc = docx.Document(docx_file)
-        return " ".join([para.text for para in doc.paragraphs])
-    except Exception as e:
-        print(f"Error reading DOCX file: {e}")
-        return ""
 
 # Create assignment view
 def create_assignment(request):
@@ -774,7 +699,7 @@ def create_assignment(request):
 
             # ✅ TEXT Extraction
             try:
-                text = extract_text_from_file(file_path)  # Calls the function to extract text
+                text = extract_text_from_pdf(file_path)  # Calls the function to extract text
                 assignment.extracted_text = text  # Save the extracted text
                 assignment.save(update_fields=['extracted_text'])
             except Exception as e:
@@ -800,174 +725,6 @@ def create_assignment(request):
 
     return render(request, 'give_assignment.html', {'form': form})
 
-# Extract images from PDF and save them
-import fitz  # PyMuPDF
-import uuid
-import os
-
-def extract_images_from_pdf(pdf_file):
-    """Extract images from PDF files."""
-    doc = fitz.open(pdf_file)
-    image_paths = []
-
-    for page_index in range(len(doc)):
-        for img_index, img in enumerate(doc.get_page_images(page_index)):
-            xref = img[0]
-            base_image = doc.extract_image(xref)
-            image_bytes = base_image["image"]
-            if image_bytes:
-                # Save image
-                image_filename = f"{uuid4().hex}.png"
-                image_path = os.path.join("media/teacher_images", image_filename)
-
-                os.makedirs(os.path.dirname(image_path), exist_ok=True)
-                with open(image_path, "wb") as f:
-                    f.write(image_bytes)
-                
-                image_paths.append(image_path)
-
-    return image_paths
-
-
-
-def extract_images_from_docx(docx_file):
-    """Extract images from DOCX files."""
-    docx_file_path = docx_file.path
-    image_paths = []
-
-    with zipfile.ZipFile(docx_file_path) as docx_zip:
-        # Find all image files inside the DOCX (usually located in 'word/media/')
-        for file in docx_zip.namelist():
-            if file.startswith('word/media/'):
-                image_data = docx_zip.read(file)
-                image = Image.open(BytesIO(image_data))
-                # Save image to a file
-                image_filename = f"{uuid4().hex}.png"
-                image_path = os.path.join("media/student_images", image_filename)
-                image.save(image_path)
-                image_paths.append(image_path)
-                
-    return image_paths
-
-def extract_text_from_file(file_path):
-    """Extract text from the file based on its type."""
-    print(f"Attempting to extract text from file: {file_path}")
-    if file_path.endswith('.pdf'):
-        return extract_text_from_pdf(file_path)
-    elif file_path.endswith('.txt'):
-        return extract_text_from_txt(file_path)
-    elif file_path.endswith('.docx'):
-        return extract_text_from_docx(file_path)
-    else:
-        print(f"Unsupported file type: {file_path}")
-        return ""
-
-# Calculate grammar score
-def calculate_grammar_score(text):
-    """Evaluates grammar and spelling mistakes using TextBlob."""
-    blob = TextBlob(text)
-    num_errors = sum(1 for word in blob.words if word != word.correct()) + len(blob.correct().split()) - len(blob.words)
-    
-    # Assigning scores based on error count
-    if num_errors == 0:
-        return 20  # Perfect grammar
-    elif num_errors <= 3:
-        return 10  # Minor errors
-    else:
-        return 5  # Many errors
-    
-def calculate_submission_time_score(submission_time, due_date):
-    """Calculates a score based on how early or late the assignment is submitted."""
-    # Ensure the submission time and due date are timezone-aware (if using timezones)
-    if submission_time > due_date:
-        late_duration = submission_time - due_date
-        late_days = late_duration.days
-        # A penalty for late submission, scaling based on the number of late days
-        return max(0, 20 - late_days * 2)  # Deduct 2 marks per day late, minimum 0 score
-    else:
-        # No penalty if submitted before or on time
-        return 20  # Full score if on time
-
-import nltk
-
-def calculate_model_answer_similarity(student_text, model_answer_file):
-    """Compare student content with the model answer."""
-    if not student_text or not model_answer_file:
-        return 0, set()
-
-    # Tokenize student text
-    student_words = set(nltk.word_tokenize(student_text.lower()))
-
-    try:
-        # Read the model answer file content as binary and decode it manually
-        with model_answer_file.open('rb') as file:
-            model_answer_content = file.read().decode('utf-8-sig').lower()
-    except UnicodeDecodeError:
-        # If UTF-8 decoding fails, try using ISO-8859-1 encoding
-        with model_answer_file.open('rb') as file:
-            model_answer_content = file.read().decode('ISO-8859-1').lower()
-
-    # Tokenize the model answer content
-    model_words = set(nltk.word_tokenize(model_answer_content))
-
-    # Find common words
-    common_words = student_words.intersection(model_words)
-
-    # Calculate similarity as the ratio of common words to model answer words
-    similarity = (len(common_words) / len(model_words)) * 100 if model_words else 0
-
-    return similarity, common_words
-
-
-
-
-# Check plagiarism between student submissions
-def check_student_to_student_plagiarism(submission, other_submissions, teacher_email):
-    student_text = submission.content.strip() if submission.content else ""
-    if not student_text:
-        return 0
-
-    highest_similarity = 0
-    for past in other_submissions.iterator():
-        past_text = past.content.strip() if past.content else ""
-        similarity = SequenceMatcher(None, student_text, past_text).ratio() * 100
-        highest_similarity = max(highest_similarity, similarity)
-
-    if highest_similarity >= PLAGIARISM_THRESHOLD:
-        notify_teacher_and_student(submission, teacher_email, highest_similarity)
-
-    return highest_similarity
-
-from django.http import HttpResponse
-import os
-import re
-from classmanagement.models import Submission
-
-def save_image_similarity_scores():
-    result_file = 'media/comparison_results.txt'
-
-    if not os.path.exists(result_file):
-        return
-
-    with open(result_file, 'r') as file:
-        lines = file.readlines()
-
-    for line in lines:
-        match = re.match(r"(.+?): .+?→ RMSE = \(([\d.]+),", line)
-        if match:
-            student_name = match.group(1).strip()
-            score = float(match.group(2).strip())
-
-            try:
-                submission = Submission.objects.get(student__username=student_name)
-                submission.image_similarity_score = score
-                submission.save()
-            except Submission.DoesNotExist:
-                print(f"No submission found for {student_name}")
-
-def run_image_plagiarism_check(request):
-    save_image_similarity_scores()
-    return HttpResponse("✅ Image similarity scores updated and saved.")
 
 
 
@@ -987,91 +744,6 @@ def notify_teacher_and_student(submission, teacher_email, plagiarism_score):
 
 
 
-# Calculate final grade based on various criteria
-def calculate_total_grade(submission):
-    model_answer = submission.assignment.model_answer_file or ""
-    model_similarity_score, matched_words = calculate_model_answer_similarity(submission.content, model_answer)
-    grammar_score = calculate_grammar_score(submission.content)
-    submission_time_score = calculate_submission_time_score(submission.submitted_at, submission.assignment.due_date)
-
-    total_marks = model_similarity_score * 0.5 + grammar_score + submission_time_score
-
-    # Save components
-    submission.model_similarity = model_similarity_score
-    submission.grammar_score = grammar_score
-    submission.submission_time_score = submission_time_score
-    submission.total_marks = round(total_marks, 2)
-    submission.save()
-
-    logger.info(f"✅ Submission {submission.id} graded: {submission.total_marks} marks.")
-    return total_marks
-
-def calculate_text_similarity(text1, text2):
-    return round(SequenceMatcher(None, text1, text2).ratio() * 100, 2)
-
-def evaluate_submission(submission):
-    # Ensure model answer exists
-    model_answer = submission.assignment
-    if not model_answer or not model_answer.processed_content:
-        return
-
-    # 1. Calculate Text Similarity
-    similarity = calculate_text_similarity(
-        submission.preprocessed_content or '',
-        model_answer.processed_content or ''
-    )
-    submission.text_similarity_score = similarity
-
-    # 2. Combine Scores to Compute Total Marks (text + image)
-    text_weight = 0.6
-    image_weight = 0.4
-    image_score = submission.image_similarity_score or 0.0
-    total = (similarity * text_weight) + (image_score * image_weight)
-    submission.total_marks = int(total)
-
-    # Save interim result
-    submission.save()
-
-def assign_grades(submission):
-    if submission.plagiarism_score is not None:
-        model_weight = 0.6
-        grammar_weight = 0.1
-        time_weight = 0.1
-        plagiarism_weight = 0.2
-    else:
-        model_weight = 0.7
-        grammar_weight = 0.2
-        time_weight = 0.1
-        plagiarism_weight = 0
-
-    submission.total_marks = (
-        submission.text_similarity_score * model_weight +
-        submission.grammar_score * grammar_weight +
-        submission.submission_time_score * time_weight +
-        (submission.plagiarism_score * plagiarism_weight if plagiarism_weight else 0)
-    )
-
-    grade_mapping = [
-        (91, "A1", "Outstanding performance! Keep up the hard work."),
-        (81, "A2", "Great job! A little more effort can take you to the top."),
-        (71, "B1", "Impressive work! Keep focusing and improving."),
-        (61, "B2", "You're on the right track! Practice more to excel."),
-        (51, "C1", "Decent effort, but there's room for improvement."),
-        (41, "C2", "You're making progress, but consistent practice is key."),
-        (33, "D", "You need to put in more effort. Study hard."),
-        (0, "E", "Serious attention needed! Seek help and study harder."),
-    ]
-
-    for threshold, grade, feedback in grade_mapping:
-        if submission.total_marks >= threshold:
-            submission.grade = grade
-            submission.feedback = feedback
-            break
-
-    submission.save()
-    return submission
-
-
 def send_notifications():
     """Sends reminder emails to students who haven't submitted their assignments."""
     pending_students = CustomUser.objects.filter(role="student", submission__isnull=True).distinct()
@@ -1084,25 +756,19 @@ def send_notifications():
             fail_silently=True)
 
 
-
 @login_required
 @user_passes_test(is_student)
 def submit_assignment(request, assignment_id):
     assignment = get_object_or_404(Assignment, id=assignment_id)
-
-    # Get student's joined classes
     student_profile = request.user.student_profile
     student_classes = student_profile.joined_classes.all()
 
-    # Ensure the assignment belongs to a class the student is part of
-    if not assignment.joined_classes in student_classes:
+    if not student_classes.filter(id__in=assignment.joined_classes.values_list('id', flat=True)).exists():
         messages.error(request, "You are not enrolled in this class.")
         return redirect('student_dashboard')
 
-    # Fetch assignments for pagination (optional)
     query = request.GET.get('q')
-    assignments = Assignment.objects.filter(joined_classes__in=student_classes)
-
+    assignments = Assignment.objects.filter(joined_classes__in=student_classes).distinct()
     if query:
         assignments = assignments.filter(title__icontains=query)
 
@@ -1114,42 +780,16 @@ def submit_assignment(request, assignment_id):
         form = SubmissionForm(request.POST, request.FILES)
         if form.is_valid():
             submission = form.save(commit=False)
-            submission.student = student_profile  # ✅ Use StudentProfile
+            submission.student = student_profile
             submission.assignment = assignment
-            submission.submitted_at = timezone.now()  # ✅ Ensure the timestamp is recorded correctly
-            submission.is_late = submission.is_late
+            submission.submitted_at = timezone.now()
+            submission.is_late = timezone.now() > assignment.due_date
             submission.save()
 
-            submission.is_late
+            evaluate_submission(submission.id)
 
-            # Extract text from the student's submission (ensure this function works correctly)
-            student_text = extract_text(submission)
-            submission.content = student_text
-
-            # Calculate word frequencies
-            word_counts = Counter(student_text.split())  # ✅ Count words
-            submission.word_frequencies = json.dumps(word_counts)  # ✅ Store as JSON
-
-
-            # Fetch teacher email
-            teacher_profile = TeacherProfile.objects.filter(teacher=assignment.teacher).first()
-            teacher_email = teacher_profile.teacher.email if teacher_profile else "admin@submittech.com"
-
-            # Check for plagiarism
-            plagiarism_score = check_student_to_student_plagiarism(submission, Submission.objects.all(), teacher_email)
-            submission.plagiarism_score = plagiarism_score
-
-            # Calculate total marks (You should define this function)
-            total_marks = calculate_total_grade(submission)
-            submission.total_marks = total_marks  # Ensure total_marks is assigned
-
-            # Assign grade based on marks (Ensure this function works correctly)
-            assign_grades(submission)
-
-            submission.save()  # Save the submission after all the updates
-
-            messages.success(request, 'Assignment submitted successfully!')
-            return redirect('student_dashboard', class_id=assignment.joined_classes.id)
+            messages.success(request, 'Assignment submitted and evaluated successfully!')
+            return redirect('student_dashboard')
     else:
         form = SubmissionForm()
 
@@ -1160,10 +800,12 @@ def submit_assignment(request, assignment_id):
         'page_obj': page_obj,
         'query': query
     })
+
+
 @login_required
 def progress_view(request, student_id, assignment_id):
-    # Get the student profile from passed ID
-    student_profile = get_object_or_404(StudentProfile, id=student_id)
+    # Get the student profile using the related user ID
+    student_profile = get_object_or_404(StudentProfile, student__id=student_id)
 
     # Get the assignment
     assignment = get_object_or_404(Assignment, id=assignment_id)
@@ -1173,22 +815,22 @@ def progress_view(request, student_id, assignment_id):
     student_marks = student_submission.total_marks if student_submission else 0
 
     # Get all submissions for this assignment
-    all_submissions = Submission.objects.filter(assignment=assignment).select_related('student')
+    all_submissions = Submission.objects.filter(assignment=assignment).select_related('student', 'student__student')
 
-    # Prepare list of all students (except the current one) for comparison
+    # Prepare list of other students’ marks
     student_marks_list = [
         {
-            "id": sub.student.id,
-            "name": sub.student.student.first_name,
+            "id": sub.student.student.id,  # Accessing the related User model's ID
+            "name": f"{sub.student.student.first_name} {sub.student.student.last_name}",
             "marks": sub.total_marks
         }
-        for sub in all_submissions if sub.student.id != student_profile.id
+        for sub in all_submissions if sub.student.student.id != student_id
     ]
 
     context = {
         "assignment_title": assignment.title,
         "student_marks": student_marks,
-        "student_name": student_profile.name,
+        "student_name": f"{student_profile.student.first_name} {student_profile.student.last_name}",
         "student_marks_list": student_marks_list,
     }
 
@@ -1205,8 +847,8 @@ def query1to1_view(request, teacher_id, student_id):
         if message:
             PrivateMessage.objects.create(
                 sender=request.user,
-                receiver=teacher.teacher if request.user == student.student else student.student,
                 message=message,
+                receiver = teacher.teacher if request.user == student.student.student else student.student.student,
                 timestamp=now()
             )
         return redirect("query1to1", teacher_id=teacher_id, student_id=student_id)  # Redirect after saving
@@ -1243,3 +885,34 @@ def queryclassroom_view(request, class_id):
 
     return render(request, "queryclassroom.html", {"classroom": classroom, "queries": queries})
 
+# Function to notify students of a new assignment
+def notify_students_of_new_assignment(assignment_id):
+    """Send notifications to students who haven't submitted their assignment yet."""
+    assignment = Assignment.objects.get(id=assignment_id)
+    students = StudentProfile.objects.all()  # Fetch all students (StudentProfile)
+
+    for student in students:
+        # Check if the student has submitted the assignment
+        submission = Submission.objects.filter(assignment=assignment, student=student).first()
+
+        # If no submission or not submitted, send a notification
+        if not submission or not submission.submitted:
+            message = f"You have a new assignment: '{assignment.title}'. Please submit it before the due date."
+            create_notification(student, message)  # Create a notification instance
+
+# Function to create a new notification
+def create_notification(student, message):
+    """Create a notification entry in the database."""
+    Notification.objects.create(student=student, message=message)
+
+# Function to get unread notifications for a student
+def get_notifications(student):
+    """Get all unread notifications for a student."""
+    return Notification.objects.filter(student=student, is_read=False)
+
+# Function to mark a notification as read
+def mark_notification_as_read(notification_id):
+    """Mark a notification as read."""
+    notification = Notification.objects.get(id=notification_id)
+    notification.is_read = True
+    notification.save()
