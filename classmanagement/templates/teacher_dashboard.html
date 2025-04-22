@@ -62,16 +62,12 @@
                             <td class="text-center">{{ submission.grade }}</td>
                             <td class="text-center">{{ submission.feedback }}</td>
                             <td>
-                                {% if submission.assignment and student_performance.student.id %}
-                                <a href="{% url 'progress_chart' student_id=student_performance.student.id assignment_id=submission.assignment.id %}" class="btn btn-primary">
-                                    View
-                                </a>      
-                                <p>Student ID: {{ student_performance.student.id }}</p>
-                                <p>Assignment ID: {{ submission.assignment.id }}</p>
-                          
-                                {% else %}
-                                    <span class="text-muted">N/A</span>
-                                {% endif %}
+                                {% if assignment.id %}
+                                <a href="{% url 'progress_chart' assignment.id %}" class="btn btn-sm btn-primary">View Progress</a>
+                              {% else %}
+                                <span class="text-muted">No assignment found</span>
+                              {% endif %}
+                              
                             </td>                            
                         </tr>
                         {% endfor %}

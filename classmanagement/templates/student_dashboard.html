@@ -31,7 +31,7 @@
                 <td>{{ submission.grade }}</td>
                 <td>{{ submission.feedback }}</td>
                 <td>
-                  <a href="{% url 'progress_chart' student.student.id submission.assignment.id %}" class="btn btn-primary">
+                  <a href="{% url 'progress_chart' submission.assignment.id %}" class="btn btn-primary">
                     View 
                 </a>                                                      
               </td>                           
@@ -74,194 +74,106 @@
 
     
 
-<!-- ✅ Chart.js -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-    const studentPerformance = JSON.parse('{{ student_performance_json|escapejs }}');
-    const classPerformance = JSON.parse('{{ avg_class_performance_json|escapejs }}');
 
-    const assignmentLabels = studentPerformance.map(item => item.assignment);
-    const studentScores = studentPerformance.map(item => item.marks);
-    const classScores = assignmentLabels.map(title => classPerformance[title] || 0);
-
-    const ctx1 = document.getElementById('studentPerformanceChart').getContext('2d');
-    new Chart(ctx1, {
-        type: 'line',
-        data: {
-            labels: assignmentLabels,
-            datasets: [{
-                label: 'Your Marks',
-                data: studentScores,
-                borderColor: 'blue',
-                fill: false,
-                tension: 0.3
-            }]
-        }
-    });
-</script>
-
-
-<script>
-    document.addEventListener("DOMContentLoaded", function () {
-        const studentPerformance = JSON.parse('{{ student_performance_json|escapejs }}');
-        const avgClassPerformance = JSON.parse('{{ avg_class_performance_json|escapejs }}');
-    
-        document.querySelectorAll(".view-progress").forEach(button => {
-            button.addEventListener("click", function () {
-                // Close any open charts first
-                document.querySelectorAll(".progress-chart-container").forEach(div => {
-                    div.style.display = "none";
-                });
-    
-                // Find the relevant div & canvas
-                const chartContainer = this.nextElementSibling;
-                const canvas = chartContainer.querySelector(".progress-chart");
-                chartContainer.style.display = "block";
-    
-                // Get assignment data
-                const assignment = this.dataset.assignment;
-                const studentMarks = studentPerformance.find(s => s.assignment === assignment)?.marks || 0;
-                const classAvg = avgClassPerformance[assignment] || 0;
-    
-                // Destroy previous chart if exists
-                if (canvas.chartInstance) {
-                    canvas.chartInstance.destroy();
-                }
-                
-        });
-    });
-    </script>
-
-    <!-- Firecracker Sound Player -->
+    <!-- Audio -->
     <audio id="firecrackerSound" src="{% static 'sounds/firecracker.mp3' %}" preload="auto"></audio>
     
-    <!-- Full-Screen Congratulations Message -->
-    <div id="congratulationsMessage" class="congratulations-overlay">
-      <div class="congratulations-content">
-        <h2>🎉 Congrats, {{ request.user.first_name }}!</h2>
-        <p>You're one of the Top 3 performers in {{ current_class.name }}! Keep it up! 🌟</p>
-        <p>We’re proud of your hard work and dedication! 💯</p>
-      </div>
+    <!-- Modern Congrats Message -->
+    <div id="congratulationsMessage" class="congrats-toast">
+      <span class="close-btn" onclick="document.getElementById('congratulationsMessage').classList.remove('show')">&times;</span>
+      <h3>🎉 Congratulations, {{ request.user.first_name }}!</h3>
+      <p>You made it to the Top 3 in <strong>{{ current_class.name }}</strong>! Keep rising 🌟</p>
     </div>
     
-    <!-- Confetti Script -->
+    <style>
+      .congrats-toast {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        max-width: 350px;
+        padding: 20px;
+        border-radius: 15px;
+        background: rgba(255, 255, 255, 0.25);
+        backdrop-filter: blur(10px);
+        color:rgb(9, 9, 9); /* Changed font color */
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+        z-index: 9999;
+        display: none;
+        animation: slideUp 1s ease-out;
+      }
+      
+      .congrats-toast h3 {
+        font-size: 1.5rem;
+        margin-bottom: 8px;
+        color:rgb(1, 1, 1); /* Changed font color */
+      }
+      
+      .congrats-toast p {
+        font-size: 1rem;
+        margin: 0;
+        color:rgb(180, 86, 86);
+      }
+      
+      .congrats-toast.show {
+        display: block;
+      }
+      
+      .close-btn {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        color:rgb(10, 11, 10); /* Close button color change */
+        font-size: 20px;
+        cursor: pointer;
+      }
+      
+      @keyframes slideUp {
+        from {
+          transform: translateY(50px);
+          opacity: 0;
+        }
+        to {
+          transform: translateY(0);
+          opacity: 1;
+        }
+      }
+      
+    </style>
+        
+    <!-- Confetti -->
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
     
     <script>
       document.addEventListener("DOMContentLoaded", function () {
-        const loggedInStudentName = "{{ request.user.first_name }} {{ request.user.last_name }}".trim();
+        const studentName = "{{ request.user.first_name }} {{ request.user.last_name }}".trim();
         const topPerformers = {{ top_performers|safe }};
-        
-        // Check if the logged-in user is in the Top 3 performers
-        const isTopPerformer = topPerformers.some(p => p.student_name === loggedInStudentName);
-        
+    
+        const isTopPerformer = topPerformers.some(p => p.student_name === studentName);
         if (isTopPerformer) {
-          // Wait a second before starting the celebrations
           setTimeout(() => {
-            // 🎆 Firecracker Confetti
+            const toast = document.getElementById("congratulationsMessage");
+            toast.classList.add("show");
+    
+            // Subtle Confetti Burst
             confetti({
-              particleCount: 500,
-              spread: 1000,
+              particleCount: 1000,
+              spread: 500,
               origin: { y: 0.6 },
             });
     
-            // 🔊 Attempt to play sound
+            // Optional Sound
             const sound = document.getElementById("firecrackerSound");
-            const playPromise = sound.play();
-            
-            if (playPromise !== undefined) {
-              playPromise.then(() => {
-                console.log("🔥 Sound played!");
-              }).catch(error => {
-                console.log("🚫 Sound autoplay blocked by browser:", error);
-              });
-            }
+            sound.play().catch(e => console.log("Sound blocked:", e));
     
-            // Show the full-screen congratulations message
-            const congratsMessage = document.getElementById("congratulationsMessage");
-            congratsMessage.classList.add("show");
-    
-            // After 5 seconds, hide the message
-            setTimeout(function () {
-              congratsMessage.classList.remove("show");
-            }, 5000);  // 5 seconds delay before fading out
-          }, 1000);  // Delay to ensure user interaction is registered
+            // Auto-hide after 7s
+            setTimeout(() => {
+              toast.classList.remove("show");
+            }, 7000);
+          }, 800); // Wait for dashboard to settle
         }
       });
     </script>
-    
-    
-        <!-- Add CSS for full-screen overlay -->
-        <style>
-          /* Full-Screen Overlay */
-          .congratulations-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.7);  /* Dark background with transparency */
-            color: #fff;
-            display: none;
-            justify-content: center;
-            align-items: center;
-            text-align: center;
-            z-index: 9999;
-            opacity: 0;
-            transition: opacity 2s ease-in-out;
-          }
-      
-          .congratulations-overlay.show {
-            display: flex;
-            opacity: 1;
-          }
-      
-          .congratulations-content {
-            font-family: 'Poppins', sans-serif;  /* Stylish font */
-            background: linear-gradient(45deg, #ff4b5c, #ff6f61, #f77f00);  /* Gradient colorful background */
-            padding: 40px;
-            border-radius: 10px;
-            box-shadow: 0px 8px 16px rgba(0, 0, 0, 0.3);
-            width: 80%;
-            max-width: 600px;
-            animation: popIn 1s ease-in-out;
-          }
-      
-          .congratulations-content h2 {
-            font-size: 3rem;
-            margin-bottom: 20px;
-            font-weight: bold;
-            color: #ffffff;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            text-shadow: 3px 3px 8px rgba(0, 0, 0, 0.3);  /* Text shadow for extra pop */
-          }
-      
-          .congratulations-content p {
-            font-size: 1.8rem;
-            color: #fff;
-            text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.2);
-          }
-      
-          /* Fading out effect */
-          .congratulations-overlay.fade-out {
-            opacity: 0;
-            transition: opacity 2s ease-in-out;
-          }
-      
-          /* Keyframe animation for the "pop-in" effect */
-          @keyframes popIn {
-            0% {
-              transform: scale(0);
-              opacity: 0;
-            }
-            100% {
-              transform: scale(1);
-              opacity: 1;
-            }
-          }
-        </style>
-    
-      
+          
 
 {% endblock %}

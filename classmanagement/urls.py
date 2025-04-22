@@ -29,7 +29,8 @@ urlpatterns = [
     
     # Performance & Queries
     # urls.py
-    path('student/progress/<int:student_id>/<int:assignment_id>/', views.progress_view, name='progress_chart'),
+    # urls.py
+    path('progress/<int:assignment_id>/', views.progress_view, name='progress_chart'),
     path("private-chat/<int:teacher_id>/<int:student_id>/", views.query1to1_view, name="private_query"),
     path("classroom-chat/<int:class_id>/", views.queryclassroom_view, name="class_query"),
 
