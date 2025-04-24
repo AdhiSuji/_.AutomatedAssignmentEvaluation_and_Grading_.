@@ -27,7 +27,8 @@ SECRET_KEY = 'django-insecure-uercg2kz^8_*5p0ueos-s)8ak)$pkew#r&a4t=ps5!y_#ce$s6
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS = ['SubmiTech.onrender.com']
+ALLOWED_HOSTS = ['automatedassignmentevaluation-and-grading.onrender.com', 'localhost', '127.0.0.1']
+
 
 
 # Application definition
