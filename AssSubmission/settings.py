@@ -25,9 +25,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-uercg2kz^8_*5p0ueos-s)8ak)$pkew#r&a4t=ps5!y_#ce$s6'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
+ALLOWED_HOSTS = ['SubmiTech.onrender.com']
 
 
 # Application definition
@@ -179,4 +179,5 @@ STATIC_URL = 'static/'
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static'),]
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
-django_heroku.settings(locals())
+import dj_database_url
+DATABASES['default'] = dj_database_url.config(conn_max_age=600)
