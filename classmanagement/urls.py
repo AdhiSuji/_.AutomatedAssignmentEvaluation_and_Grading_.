@@ -47,8 +47,6 @@ urlpatterns = [
     path('notifications/send/', views.send_notifications, name='send_notifications'),
     
     #dashboard
-
-    #path("teacher/dashboard/", views.teacher_dashboard, name="teacher_dashboard"),
     path("teacher/dashboard/<int:class_id>/", views.teacher_dashboard, name="teacher_dashboard"),
     path("student/dashboard/", views.student_dashboard, name="student_dashboard"),
     path("student/dashboard/<int:class_id>/", views.student_dashboard, name="student_dashboard"),

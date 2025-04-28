@@ -23,15 +23,26 @@
 
 <script>
     const class_id = "{{ classroom.id }}";
-    const sender_id = "{{ request.user.id }}";
     const sender_name = "{{ request.user.first_name }}";
-    
+
     const protocol = window.location.protocol === "https:" ? "wss" : "ws";
     const chatSocket = new WebSocket(`${protocol}://${window.location.host}/ws/query/${class_id}/`);
+
+    chatSocket.onopen = () => {
+        console.log("[WebSocket] Connected to classroom:", class_id);
+    };
 
     chatSocket.onmessage = function(e) {
         const data = JSON.parse(e.data);
         displayMessage(data.sender, data.message);
+    };
+
+    chatSocket.onerror = function(e) {
+        console.error("[WebSocket Error]", e);
+    };
+
+    chatSocket.onclose = function(e) {
+        console.warn("[WebSocket Closed]", e);
     };
 
     function displayMessage(sender, message) {
@@ -39,8 +50,9 @@
         const messageElement = document.createElement("div");
         messageElement.classList.add("p-2", "mb-2", "rounded");
 
-        messageElement.style.backgroundColor = sender === sender_name ? "#d4edda" : "#e9ecef";
-        messageElement.style.textAlign = sender === sender_name ? "right" : "left";
+        const isSender = sender === sender_name;
+        messageElement.style.backgroundColor = isSender ? "#d4edda" : "#e9ecef";
+        messageElement.style.textAlign = isSender ? "right" : "left";
 
         messageElement.innerHTML = `<strong>${sender}:</strong> ${message}`;
         chatBox.appendChild(messageElement);
@@ -50,14 +62,13 @@
     document.getElementById('send-button').onclick = function() {
         const messageInput = document.getElementById('chat-message-input');
         const message = messageInput.value.trim();
+
         if (message) {
-            chatSocket.send(JSON.stringify({ 
-                "message": message,
-                "sender_id": sender_id // Add sender_id to the message
-            }));
-            messageInput.value = '';  // Clear the input after sending
+            chatSocket.send(JSON.stringify({ message: message }));
+            messageInput.value = '';  // Clear the input field after sending
         }
     };
-    
 </script>
+
+
 {% endblock %}

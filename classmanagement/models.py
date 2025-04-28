@@ -121,33 +121,44 @@ class Assignment(models.Model):
         return f"{self.title} ({self.joined_classes.name if self.joined_classes else 'No Class'})"
 
 
+from django.db import models
+from django.utils import timezone
+
 class Submission(models.Model):
-    student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='submissions')
-    assignment = models.ForeignKey(Assignment, on_delete=models.CASCADE, related_name='submissions')
+    student = models.ForeignKey('StudentProfile', on_delete=models.CASCADE, related_name='submissions')
+    assignment = models.ForeignKey('Assignment', on_delete=models.CASCADE, related_name='submissions')
     file = models.FileField(upload_to='submissions/')
     submitted_at = models.DateTimeField(default=timezone.now)
-    content = models.TextField(blank=True, null=True)  # Store extracted text
-    preprocessed_content = models.TextField(blank=True, null=True)
+    content = models.TextField(blank=True, null=True)  # Extracted full text
+    preprocessed_content = models.TextField(blank=True, null=True)  # Cleaned text for similarity checking
     extracted_images = models.ImageField(upload_to='extracted_student_images/', null=True, blank=True)
-    image_text = models.TextField(null=True, blank=True)
-    text_similarity_score = models.FloatField(blank=True, null=True)  # ✅ score out of 100
-    image_similarity_score = models.FloatField(blank=True, null=True)
-    plagiarism_score = models.FloatField(default=0.0)  # Only for student-to-student comparisons
-    is_late = models.BooleanField(default=False)
-    grammar_score = models.IntegerField(default=0)
-    total_marks = models.IntegerField(default=0) 
-    grade = models.CharField(max_length=2, blank=True, null=True) 
-    feedback = models.TextField(blank=True, null=True)
-    comments = models.TextField(blank=False, null=True)
+    image_text = models.TextField(blank=True, null=True)  # OCR result from diagrams
+    text_similarity_score = models.FloatField(blank=True, null=True)  # (0-100) Text Similarity with Model Answer
+    image_similarity_score = models.FloatField(blank=True, null=True)  # (0-100) Diagram Similarity Score
+    plagiarism_score = models.FloatField(default=0.0)  # Only for student-to-student plagiarism detection
+    grammar_score = models.IntegerField(default=0)  # Grammar quality score (0-100)
+    provisional_marks = models.DecimalField(max_digits=5, decimal_places=2, default=0.0)  # Marks before plagiarism penalty
+    final_marks = models.DecimalField(max_digits=5, decimal_places=2, default=0.0)  # Final marks after considering penalties
+    feedback_after_plagiarism = models.TextField(blank=True, null=True)
+    feedback_before_plagiarism = models.TextField(blank=True, null=True)
+    grade_before_plagiarism = models.CharField(max_length=2, blank=True, null=True)  # A+, A, B, etc. before penalty
+    grade_after_plagiarism = models.CharField(max_length=2, blank=True, null=True)   # A+, A, B, etc. after penalty
+    is_late = models.BooleanField(default=False)  # Whether submission was late
+    student_comments = models.TextField(blank=True, null=True)  # Student's comments (optional)
+    teacher_feedback = models.TextField(blank=True, null=True)  # Teacher's feedback after evaluation
 
     def save(self, *args, **kwargs):
-        """Automatically mark submission as late if submitted after the deadline."""
+        """Automatically mark submission as late and adjust marks if submitted after the deadline."""
         if self.assignment.due_date and self.submitted_at > self.assignment.due_date:
             self.is_late = True
+
+            # 👉 Reduce final marks by 10% if it's late
+            if self.final_marks:  # if final_marks already calculated
+                self.final_marks = round(self.final_marks * 0.9, 2)  # Reduce 10% and round to 2 decimals
         else:
             self.is_late = False
 
-        super().save(*args, **kwargs)  # ✅ Save the model
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.student.student.email} - {self.assignment.title}"

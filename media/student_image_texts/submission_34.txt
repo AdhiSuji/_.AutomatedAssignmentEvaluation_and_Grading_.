@@ -1,0 +1,52 @@
+
+Cloud Computing Architecture oS
+@ Client Infrastructure Front End
+
+Management
+
+Back End
+
+Security
+
+. ©
+oo
+
+
+
+Cloud Computing oS
+
+Types of Cloud Computing Services
+
+SaaS laaS
+
+Software as a Service
+
+Infrastructure as a Service
+
+What is
+
+PaaS Cloud Computing
+
+Platform as a Service
+
+FaaS
+Function as a Service
+
+Private Cloud, Public Cloud, Hybrid Cloud
+
+—
+
+
+Cloud Computing Architecture oS
+@ Client Infrastructure Front End
+
+Management
+
+Back End
+
+Security
+
+. ©
+oo
+
+

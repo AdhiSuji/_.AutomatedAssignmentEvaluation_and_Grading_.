@@ -141,11 +141,29 @@ class AssignmentForm(forms.ModelForm):
 # ---------------------------------------------------
 # ✅ Assignment Submission Form (For Students)
 # ---------------------------------------------------
+from django import forms
+from .models import Submission
+from django.utils import timezone
+
+
 class SubmissionForm(forms.ModelForm):
     class Meta:
         model = Submission
-        fields = ['assignment', 'file', 'comments']
+        fields = ['assignment','file', 'student_comments']  # Include your 'file' upload and 'comments' (for late reason)
 
+    def __init__(self, *args, **kwargs):
+        self.assignment = kwargs.pop('assignment', None)  # get assignment object while initializing
+        super().__init__(*args, **kwargs)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        comments = cleaned_data.get('student_comments')
+
+        # Check deadline
+        if self.assignment and self.assignment.deadline and self.assignment.deadline < timezone.now():
+            if not student_comments:
+                raise forms.ValidationError("Since you are submitting after the deadline, please provide a reason for late submission.")
+        return cleaned_data
 
 # ---------------------------------------------------
 # ✅ Class Enrollment Form (For Students)

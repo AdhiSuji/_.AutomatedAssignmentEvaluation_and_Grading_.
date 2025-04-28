@@ -1,0 +1,38 @@
+
+Cloud Computing – Overview
+Cloud Computing is the delivery of computing services (like storage, servers, databases) over the internet, allowing users to access data and applications remotely. It eliminates the need for physical infrastructure, offering flexibility, scalability, and cost-efficiency.
+
+How It Works
+Infrastructure: Uses remote servers to store and process data.
+On-Demand Access: Resources can be scaled up or down as needed.
+Benefits: Reduces costs, improves reliability, and enhances accessibility.
+
+Architecture of Cloud Computing
+Front End:
+Thin Clients: Lightweight browsers.
+Fat Clients: Feature-rich applications.
+Back End:
+Servers and storage handle application logic and data processing.
+Network Delivery:
+Internet: Global access.
+Intranet: Internal organization use.
+Intercloud: Cloud-to-cloud interoperability.
+
+
+
+Types of Cloud Services
+IaaS (Infrastructure as a Service):
+Provides virtual machines, storage, networks.
+Offers control, scalability, and hardware cost savings.
+PaaS (Platform as a Service):
+Simplifies app development.
+Manages infrastructure, automates scaling.
+SaaS (Software as a Service):
+Delivers software via the internet.
+Accessible, auto-updated, and cost-effective.
+FaaS (Function as a Service):
+Runs code in response to events (serverless).
+Pay-as-you-go model, high scalability
+
+  
+ 

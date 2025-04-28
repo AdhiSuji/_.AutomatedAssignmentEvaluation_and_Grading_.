@@ -28,100 +28,101 @@
         <div class="col-md-4 mb-4">
             <div class="card shadow-sm rounded-4 border-0">
                 <div class="card-body text-center p-4">
-
+    
                     <!-- Profile Picture -->
                     {% if student_profile.profile_pic %}
                         <img src="{{ student_profile.profile_pic.url }}" class="rounded-circle img-thumbnail mb-3" style="width: 150px; height: 150px; object-fit: cover;" alt="Profile Pic">
                     {% else %}
                         <img src="{% static 'default_folder/default_student.jpg' %}" class="rounded-circle img-thumbnail mb-3" style="width: 150px; height: 150px; object-fit: cover;" alt="Default Pic">
                     {% endif %}
-
+    
                     <!-- User Name & Username -->
                     <h5 class="fw-bold">{{ request.user.get_full_name|default:request.user.username }}</h5>
                     <p class="text-muted">@{{ request.user.username }}</p>
-
+    
                     <!-- Bio -->
                     {% if student_profile.bio %}
                         <p class="small mt-3" id="bioText">{{ student_profile.bio }}</p>
                     {% else %}
                         <p class="small mt-3 text-muted">No bio added yet.</p>
                     {% endif %}
-
-                    <!-- Edit & Save Buttons -->
+    
+                    <!-- Edit Profile Button -->
                     <button id="editProfileBtn" class="btn btn-outline-secondary btn-sm mt-2" onclick="enableEdit()">Edit Profile</button>
-
+    
                     <!-- Update Profile Form -->
-                    <form id="updateProfileForm" method="POST" enctype="multipart/form-data" class="mt-3" style="display: {% if not student_profile.bio and not student_profile.profile_pic %}block{% else %}none{% endif %};">
+                    <form id="updateProfileForm" method="POST" enctype="multipart/form-data" class="mt-3" style="display: none;">
                         {% csrf_token %}
-
-                        <!-- Profile Pic Upload -->
                         <div class="form-group mb-2">
                             {{ form.profile_pic.label_tag }} {{ form.profile_pic }}
                         </div>
-
-                        <!-- Bio Field -->
                         <div class="form-group mb-2">
                             {{ form.bio.label_tag }} {{ form.bio }}
                         </div>
-
-                        <button type="submit" class="btn btn-primary w-100 mt-2">
-                            Update Profile
-                        </button>
+                        <button type="submit" class="btn btn-primary w-100 mt-2">Update Profile</button>
                     </form>
-
+    
                 </div>
             </div>
         </div>
-
-        <!-- Classes and Assignments -->
+    
+        <!-- Classes and Assignments Section -->
         <div class="col-md-8">
-
-            <!-- Joined Classes Section -->
+    
+            <!-- Joined Classes Card -->
             <div class="card shadow-sm rounded-4 border-0 mb-4">
                 <div class="card-body p-4">
                     <h4 class="fw-semibold mb-4">Your Classes</h4>
-
+    
                     {% if joined_classes %}
                         <div class="accordion accordion-flush" id="classesAccordion">
-
                             {% for classroom in joined_classes %}
-                            <div class="accordion-item mb-3 border rounded-3">
-                                <h2 class="accordion-header" id="heading{{ forloop.counter }}">
-                                    <button class="accordion-button collapsed fw-medium" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ forloop.counter }}">
-                                        {{ classroom.name }}
-                                    </button>
-                                </h2>
-
-                                <div id="collapse{{ forloop.counter }}" class="accordion-collapse collapse" data-bs-parent="#classesAccordion">
-                                    <div class="accordion-body">
-
-                                        <!-- Teachers List -->
-                                        <div class="mb-4">
-                                        <h6 class="fw-semibold mb-2">Teacher:</h6>
-                                        <ul class="list-group list-group-flush">
-                                            <li class="list-group-item d-flex flex-column align-items-start">
-                                                <span class="mb-2">{{ classroom.teacher.teacher.get_full_name }}</span>
-  
-                                                <div class="d-flex flex-wrap gap-2">
-                                                    <!-- 1:1 Private Chat Button -->
-                                                    {% if teacher_id and student_id %}
-                                                        <a href="{% url 'private_query' teacher_id=teacher_id student_id=student_id %}" class="btn btn-outline-primary btn-sm">
-                                                            Private Chat
-                                                        </a>
-                                                    {% else %}
-                                                        <span class="text-danger small">Private chat unavailable.</span>
-                                                    {% endif %}
-  
-                                                    <!-- 1:N Classroom Chat Button -->
-                                                    <a href="{% url 'class_query' class_id=classroom.id %}" class="btn btn-outline-primary btn-sm">
-                                                         Class Chat
-                                                    </a>
-                                                </div>
-                                            </li>
-                                        </ul>
-                                    </div>
-                                        
-                                            <!-- Assignments List -->
+                                <div class="accordion-item mb-3 border rounded-3">
+                                    <h2 class="accordion-header" id="heading{{ forloop.counter }}">
+                                        <button class="accordion-button collapsed fw-medium" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ forloop.counter }}">
+                                            {{ classroom.name }}
+                                        </button>
+                                    </h2>
+    
+                                    <div id="collapse{{ forloop.counter }}" class="accordion-collapse collapse" data-bs-parent="#classesAccordion">
+                                        <div class="accordion-body">
+    
+                                            <div class="mb-4">
+                                                <h6 class="fw-semibold mb-2">Teacher:</h6>
+                                                <ul class="list-group list-group-flush">
+                                                    <li class="list-group-item d-flex flex-column align-items-start position-relative">
+                                                        <div class="w-100 d-flex justify-content-between align-items-center">
+                                                            <span class="fw-medium">{{ classroom.teacher.teacher.get_full_name }}</span>
+                                                            
+                                                            <!-- Leave Class Button -->
+                                                            <form method="POST" action="{% url 'delete_class' class_id=classroom.id %}">
+                                                                {% csrf_token %}
+                                                                <button type="submit" class="btn btn-outline-danger btn-sm">
+                                                                    Leave Class
+                                                                </button>
+                                                            </form>
+                                                        </div>
+                                            
+                                                        <div class="d-flex flex-wrap gap-2 mt-3">
+                                                            <!-- 1:1 Private Chat Button -->
+                                                            {% if teacher_id and student_id %}
+                                                                <a href="{% url 'private_query' teacher_id=teacher_id student_id=student_id %}" class="btn btn-outline-primary btn-sm">
+                                                                    Private Chat
+                                                                </a>
+                                                            {% else %}
+                                                                <span class="text-danger small">Private chat unavailable.</span>
+                                                            {% endif %}
+                                            
+                                                            <!-- 1:N Classroom Chat Button -->
+                                                            <a href="{% url 'class_query' class_id=classroom.id %}" class="btn btn-outline-primary btn-sm">
+                                                                Class Chat
+                                                            </a>
+                                                        </div>
+                                                    </li>
+                                                </ul>
+                                            </div>    
+    
+                                            <!-- Assignments -->
                                             <h6 class="fw-semibold">Assignments:</h6>
                                             {% if classroom.assignments.all %}
                                                 <ul class="list-group list-group-flush">
@@ -140,65 +141,67 @@
                                             {% else %}
                                                 <p class="text-warning small">No assignments available yet.</p>
                                             {% endif %}
-
+    
                                             <a href="{% url 'student_dashboard' classroom.id %}" class="btn btn-outline-primary btn-sm mt-3 w-100">
                                                 Go to {{ classroom.name }} Dashboard
                                             </a>
-                                            
-                                            
-
+    
                                         </div>
                                     </div>
                                 </div>
                             {% endfor %}
-
                         </div>
                     {% else %}
                         <p class="text-danger">You are not enrolled in any classes yet. Join one now!</p>
                     {% endif %}
+    
                 </div>
             </div>
-
+    
         </div>
-
+    
     </div>
-
-</div>
-
-<!-- Modal to Join Class -->
-<div class="modal fade" id="addTeacherModal" tabindex="-1" aria-labelledby="addTeacherModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content rounded-4 border-0">
-            <div class="modal-header bg-primary text-white rounded-top-4">
-                <h5 class="modal-title" id="addTeacherModalLabel">Join a Class</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+    
+    <!-- Modal to Join Class -->
+    <div class="modal fade" id="addTeacherModal" tabindex="-1" aria-labelledby="addTeacherModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content rounded-4 border-0">
+                <div class="modal-header bg-primary text-white rounded-top-4">
+                    <h5 class="modal-title" id="addTeacherModalLabel">Join a Class</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <form method="POST" action="{% url 'join_class' %}">
+                        {% csrf_token %}
+                        <div class="form-group mb-3">
+                            <label for="teacher_reference_id" class="form-label">Teacher Reference ID:</label>
+                            <input type="text" name="teacher_reference_id" id="teacher_reference_id" class="form-control" placeholder="Enter teacher's reference ID" required>
+                        </div>
+    
+                        <div class="form-group mb-3">
+                            <label for="class_selection" class="form-label">Select Class:</label>
+                            <select name="joined_classes" id="class_selection" class="form-select" disabled required>
+                                <option value="">Enter Reference ID first</option>
+                            </select>
+                        </div>
+    
+                        <button type="submit" class="btn btn-primary w-100" id="addTeacherBtn" disabled>
+                            Join Class
+                        </button>
+                    </form>
+                </div>
             </div>
-            <div class="modal-body p-4">
-                <form method="POST" action="{% url 'join_class' %}">
-                    {% csrf_token %}
-                    
-                    <div class="form-group mb-3">
-                        <label for="teacher_reference_id" class="form-label">Teacher Reference ID:</label>
-                        <input type="text" name="teacher_reference_id" id="teacher_reference_id" class="form-control" placeholder="Enter teacher's reference ID" required>
-                    </div>
-            
-                    <div class="form-group mb-3">
-                        <label for="class_selection" class="form-label">Select Class:</label>
-                        <select name="joined_classes" id="class_selection" class="form-select" disabled required>
-                            <option value="">Enter Reference ID first</option>
-                        </select>
-                    </div>
-            
-                    <button type="submit" class="btn btn-primary w-100" id="addTeacherBtn" disabled>
-                        Join Class
-                    </button>
-                </form>
-            </div>
-            
         </div>
     </div>
-</div>
-
+    
+    <!-- JavaScript to Enable Editing -->
+    <script>
+    function enableEdit() {
+        document.getElementById('updateProfileForm').style.display = 'block';
+        document.getElementById('editProfileBtn').style.display = 'none';
+    }
+    </script>
+    
 <!-- Script for Dynamic Class Dropdown -->
 <script>
 document.getElementById("teacher_reference_id").addEventListener("input", function() {
@@ -240,24 +243,6 @@ document.getElementById("teacher_reference_id").addEventListener("input", functi
     }
 });
 
-<!-- Add this CSS in your <style> section or stylesheet -->
-    <style>
-      .btn-outline-purple {
-        color: #6f42c1;
-        border: 2px solid #6f42c1;
-        background-color: transparent;
-        transition: background-color 0.3s, color 0.3s;
-      }
-    
-      .btn-outline-purple:hover,
-      .btn-outline-purple:active,
-      .btn-outline-purple:focus {
-        background-color: #6f42c1 !important;
-        color: white !important;
-      }
-    </style>
-    
-
 // Edit Profile Toggle
 function enableEdit() {
     const updateForm = document.getElementById('updateProfileForm');
@@ -266,14 +251,21 @@ function enableEdit() {
 }
 </script>
 
-<h3>Your Notifications:</h3>
-{% for notification in notifications %}
-    <div class="notification">
-        <p>{{ notification.message }}</p>
-        <small>{{ notification.created_at }}</small>
-        <a href="{% url 'mark_notification_read' notification.id %}">Mark as read</a>
-    </div>
-{% endfor %}
+<!-- Add this CSS in your <style> section or stylesheet -->
+<style>
+    .btn-outline-purple {
+        color: #6f42c1;
+        border: 2px solid #6f42c1;
+        background-color: transparent;
+        transition: background-color 0.3s, color 0.3s;
+    }
 
+    .btn-outline-purple:hover,
+    .btn-outline-purple:active,
+    .btn-outline-purple:focus {
+        background-color: #6f42c1 !important;
+        color: white !important;
+    }
+</style>
 
 {% endblock %}

@@ -4,6 +4,7 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth import authenticate, login, logout, get_user_model  
 from django.contrib import messages  
 
+from collections import defaultdict
 
 #Email
 from django.core.mail import send_mail  
@@ -12,8 +13,6 @@ import json
 #Database & Time  
 from django.utils.timezone import now  
 from django.utils import timezone  
-#Data processing
-from collections import defaultdict, Counter 
 #HTTP & Queries 
 from django.http import JsonResponse  
 from django.db.models import Q  
@@ -22,12 +21,7 @@ from django.core.paginator import Paginator
 #MOdels & Forms
 from .models import ( CustomUser, Classroom, Assignment, Submission, Enrollment, Performance, StudentProfile, TeacherProfile, PrivateMessage, QueryMessage , Notification )  
 from .forms import ( AssignmentForm, SubmissionForm, ClassForm, StudentProfileForm, TeacherProfileForm  )  
-#Notifications 
-from .notifications import notify_teacher_and_student  
-from collections import Counter
 
-
-#UTILS             
 
 def is_admin(user):
     return user.is_authenticated and user.role == 'admin'
@@ -309,27 +303,31 @@ def teacher_dashboard(request, class_id):
         for submission in student_submissions:
             student_performance["assignments"].append({
                 "assignment": submission.assignment,
-                "marks": submission.total_marks,
                 "is_late": submission.is_late,
                 "plagiarism_score": submission.plagiarism_score,
-                "grade": submission.grade,
-                "feedback": submission.feedback,
                 "text_similarity_score": submission.text_similarity_score,
                 "image_similarity_score": submission.image_similarity_score,
+                "provisional_marks": float(submission.provisional_marks), 
+                "final_marks": float(submission.final_marks),  # ✅ Add this
+                "grade_before_plagiarism": submission.grade_before_plagiarism,  # ✅ Add this
+                "grade_after_plagiarism": submission.grade_after_plagiarism,  # ✅ Add this
+                "feedback_before_plagiarism": submission.feedback_before_plagiarism,  # ✅ Add this
+                "feedback_after_plagiarism": submission.feedback_after_plagiarism,  # ✅ Add this
+
             })
 
             student_performance_list.append({
                 "student": student.student.username,  # Use full name if needed
                 "assignment": submission.assignment.title,
-                "marks": submission.total_marks
+                "marks": float(submission.final_marks)  # Convert Decimal to float here too
             })
 
-            student_performance["total_score"] += submission.total_marks
+            student_performance["total_score"] += float(submission.final_marks)  # Sum as float
 
             # ✅ Compute class average per assignment
             if submission.assignment.title not in class_avg_performance:
                 class_avg_performance[submission.assignment.title] = []
-            class_avg_performance[submission.assignment.title].append(submission.total_marks)
+            class_avg_performance[submission.assignment.title].append(float(submission.final_marks))  # Convert to float
 
         performance_data.append(student_performance)
 
@@ -339,7 +337,6 @@ def teacher_dashboard(request, class_id):
         class_avg_performance[assignment] = sum(scores) / len(scores) if scores else 0
 
     # ✅ Fetch top 3 students based on performance
-        # ✅ Sort students based on total score and get top 3
     sorted_performance_data = sorted(performance_data, key=lambda x: x["total_score"], reverse=True)
     top_students = sorted_performance_data[:3]
 
@@ -359,69 +356,73 @@ def teacher_dashboard(request, class_id):
     })
 
 
+
 @login_required
 def student_dashboard(request, class_id=None):
-    # Fetch the student's profile
     student_profile = get_object_or_404(StudentProfile, student=request.user)
-    
-    # Fetch the classroom by ID
     classroom = get_object_or_404(Classroom, id=class_id)
 
-    # ✅ Get all submissions for the student in this classroom
+    # Which marks to display: 'provisional' or 'final'
+    marks_type = request.GET.get('marks_type', 'provisional')  # default to 'provisional'
+
+    # Mapping marks_type to the correct grade field
+    grade_field_mapping = {
+        'provisional': 'grade_before_plagiarism',
+        'final': 'grade_after_plagiarism',
+    }
+    grade_field = grade_field_mapping.get(marks_type, 'grade_after_plagiarism')
+
+    # Fetch all submissions by the student for this class
     submissions = Submission.objects.filter(
         student=student_profile,
-        assignment__joined_classes=classroom  # Ensure that 'joined_classes' is used correctly
+        assignment__joined_classes=classroom
     ).order_by('-submitted_at')
 
-    # ✅ Student's performance data (personal)
+    # Preparing student performance data for chart/analysis
     student_performance = [{
         "assignment": s.assignment.title,
-        "marks": s.total_marks,
-        "grade": s.grade,
-        "feedback": s.feedback
+        "marks": float(getattr(s, f'{marks_type}_marks')),  # e.g., provisional_marks or final_marks
+        "grade": getattr(s, grade_field),             # e.g., grade_before_plagiarism or grade_after_plagiarism
+        "feedback": s.feedback_after_plagiarism or s.feedback_before_plagiarism
     } for s in submissions]
 
-    # ✅ Get all students enrolled in this classroom
+    # Fetch all students in the classroom
     student_enrollments = Enrollment.objects.filter(classroom=classroom, role='student')
     all_students = [enrollment.student for enrollment in student_enrollments]
 
-    # ✅ Class performance calculation (aggregate marks for each assignment)
+    # Calculate overall class performance
     class_performance = defaultdict(list)
     student_scores = {}
 
-    # Efficient query to fetch all students' submissions at once
     submissions_for_class = Submission.objects.filter(
-        assignment__joined_classes=classroom  # Using 'joined_classes' in the filter
+        assignment__joined_classes=classroom
     ).select_related('student', 'assignment')
 
-    # Group submissions by assignment title and calculate the score for each student
     for sub in submissions_for_class:
-        class_performance[sub.assignment.title].append(sub.total_marks)
-        
-        # Add total marks to the student's score
+        marks = getattr(sub, f'{marks_type}_marks')
+        class_performance[sub.assignment.title].append(marks)
+
         student_name = f"{sub.student.student.first_name} {sub.student.student.last_name}".strip()
         if student_name in student_scores:
-            student_scores[student_name]['overall_score'] += sub.total_marks
+            student_scores[student_name]['overall_score'] += marks
         else:
             student_scores[student_name] = {
                 "student_name": student_name,
-                "overall_score": sub.total_marks
+                "overall_score": marks
             }
 
-    
-
-    # ✅ Sort students by their overall score to get the top 3 performers
+    # Find top 3 performers based on overall marks
     top_performers = sorted(student_scores.values(), key=lambda x: x['overall_score'], reverse=True)[:3]
 
-    # Pass the context to the template
+    # Render the dashboard
     return render(request, 'student_dashboard.html', {
         'submissions': submissions,
         'student_performance_json': json.dumps(student_performance),
         'top_performers': top_performers,
         'current_class': classroom,
-        'student': student_profile, 
+        'student': student_profile,
+        'marks_type': marks_type,
     })
-
 
 
 #ADMIN VIEWS (Optional)   
@@ -546,6 +547,9 @@ def add_teacher(request):
     else:
         return redirect('student_profile')
 
+from django.shortcuts import get_object_or_404
+from django.http import JsonResponse
+
 def get_teacher_classes(request):
     reference_id = request.GET.get('reference_id')
     print("DEBUG: Got reference_id:", reference_id)
@@ -553,20 +557,16 @@ def get_teacher_classes(request):
     if not reference_id:
         return JsonResponse({'error': 'No reference ID provided'}, status=400)
 
-    try:
-        teacher = get_object_or_404(TeacherProfile, reference_id=reference_id)
-        classes = Classroom.objects.filter(teacher=teacher)
-        print("DEBUG: Found classes:", list(classes))
+    teacher = get_object_or_404(TeacherProfile, reference_id=reference_id)
+    classes = Classroom.objects.filter(teacher=teacher)
+    print("DEBUG: Found classes:", list(classes))
 
-        class_list = [
-            {'id': cls.id, 'name': cls.name}
-            for cls in classes
-        ]
+    class_list = [
+        {'id': cls.id, 'name': cls.name}
+        for cls in classes
+    ]
 
-        return JsonResponse({'classes': class_list})
-
-    except TeacherProfile.DoesNotExist:
-        return JsonResponse({'classes': []})
+    return JsonResponse({'classes': class_list})
 
 
 def join_class(request):
@@ -606,16 +606,38 @@ def join_class(request):
     return redirect('join_class')
 
 
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import get_object_or_404, redirect
+from django.contrib import messages
+from .models import Classroom, Enrollment
+
 @login_required
-@user_passes_test(is_teacher)
 def delete_class(request, class_id):
-    class_obj = get_object_or_404(Classroom, id=class_id, teacher=request.user)
+    # Get the classroom object
+    classroom = get_object_or_404(Classroom, id=class_id)
 
-    if request.method == "POST":
-        class_obj.delete()
-        messages.success(request, "Class deleted successfully!")
+    # Check if the user is the teacher of the class
+    if request.user == classroom.teacher.teacher:  # Access the teacher's user
+        if request.method == "POST":
+            # Delete all enrollments for this class first
+            Enrollment.objects.filter(classroom=classroom).delete()
+            # Now delete the classroom
+            classroom.delete()
+            messages.success(request, f"Class '{classroom.name}' deleted successfully!")
+            return redirect('teacher_profile')
 
-    return redirect("teacher_dashboard")
+    # Check if the user is a student enrolled in the class
+    elif Enrollment.objects.filter(student=request.user, classroom_id=class_id).exists():
+        if request.method == "POST":
+            # Remove the student from the class
+            enrollment = Enrollment.objects.get(student=request.user, classroom_id=class_id)
+            enrollment.delete()
+            messages.success(request, f"You have left the class '{classroom.name}'.")
+            return redirect('student_profile')
+
+    # If the user is neither the teacher nor a student in the class, show an error message
+    messages.error(request, "You do not have permission to perform this action.")
+    return redirect('student_profile')
 
 @login_required
 @user_passes_test(is_teacher)
@@ -727,36 +749,6 @@ def create_assignment(request):
     return render(request, 'give_assignment.html', {'form': form})
 
 
-
-
-# Notify teacher and student in case of plagiarism
-def notify_teacher_and_student(submission, teacher_email, plagiarism_score):
-    """Sends an alert email to the teacher and student about plagiarism detection."""
-    message = (
-        f"Hello,\n\nA submission from {submission.student.student.email} has a plagiarism score of {plagiarism_score:.2f}%.\n"
-        f"Assignment: {submission.assignment.title}\n\nPlease review it.\n\nBest regards,\nSubmitTech"
-    )
-    send_mail(
-        "⚠️ Plagiarism Alert: High Similarity Detected!",
-        message,
-        'noreply@submitech.com',
-        [teacher_email, submission.student.student.email]
-    )
-
-
-
-def send_notifications():
-    """Sends reminder emails to students who haven't submitted their assignments."""
-    pending_students = CustomUser.objects.filter(role="student", submission__isnull=True).distinct()
-    for student in pending_students:
-        send_mail(
-            '⏳ Assignment Reminder',
-            '📌 You have pending assignments. Please submit before the deadline.',
-            'admin@submittech.com',
-            [student.email],
-            fail_silently=True)
-
-
 @login_required
 @user_passes_test(is_student)
 def submit_assignment(request, assignment_id):
@@ -818,7 +810,6 @@ from django.conf import settings
 from django.utils import timezone
 from django.core.files import File
 from django.db import transaction
-from django.utils.timezone import is_naive, make_aware, get_current_timezone
 
 import nltk
 from nltk.tokenize import word_tokenize
@@ -829,9 +820,7 @@ from sentence_transformers import SentenceTransformer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-from classmanagement.models import Submission
 import pytesseract
-
 # ------------------- Setup --------------------
 logger = logging.getLogger(__name__)
 pytesseract.pytesseract.tesseract_cmd = r'C:\Tesseract-OCR\tesseract.exe'
@@ -848,48 +837,107 @@ TEACHER_IMG_DIR = os.path.join(settings.MEDIA_ROOT, 'extracted_teacher_images')
 os.makedirs(STUDENT_IMG_DIR, exist_ok=True)
 os.makedirs(TEACHER_IMG_DIR, exist_ok=True)
 
+import os
+import fitz
+import cv2
+import pytesseract
+import numpy as np
+import docx
+from PIL import Image
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib import messages
+from django.utils import timezone
+from django.contrib.auth.decorators import login_required, user_passes_test
+from sklearn.metrics.pairwise import cosine_similarity
+from sentence_transformers import SentenceTransformer
+from .models import Assignment, Submission
+from .forms import SubmissionForm
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+from textblob import TextBlob
+from sklearn.feature_extraction.text import TfidfVectorizer
 
-# ------------------- Text Utilities --------------------
+# Global Text Model
+TEXT_MODEL = SentenceTransformer('paraphrase-MiniLM-L6-v2')
+
+# ---------------------- Utility Functions ----------------------
+
+def is_pdf(path):
+    return path.lower().endswith('.pdf')
+
+def is_docx(path):
+    return path.lower().endswith('.docx')
+
 def extract_text_from_pdf(path):
-    """Extract raw text from all pages of a PDF."""
-    return "".join(page.get_text() for page in fitz.open(path))
+    doc = fitz.open(path)
+    return "".join(page.get_text() for page in doc)
+
+def extract_text_from_docx(path):
+    doc = docx.Document(path)
+    return "\n".join(para.text for para in doc.paragraphs)
+
+def extract_text(path):
+    if is_pdf(path):
+        return extract_text_from_pdf(path)
+    elif is_docx(path):
+        return extract_text_from_docx(path)
+    return ""
 
 def preprocess_text(text):
-    """Tokenize, remove stopwords, lemmatize, and clean text."""
     stop_words = set(stopwords.words('english'))
     lemmatizer = WordNetLemmatizer()
     tokens = word_tokenize(text.lower())
-    return " ".join(lemmatizer.lemmatize(w) for w in tokens if w.isalnum() and w not in stop_words)
+    return " ".join(
+        lemmatizer.lemmatize(w) for w in tokens if w.isalnum() and w not in stop_words
+    )
 
 def compare_text_similarity(t1, t2):
-    """Compute cosine similarity between two texts using Sentence-BERT."""
-    emb1, emb2 = TEXT_MODEL.encode([t1]), TEXT_MODEL.encode([t2])
-    return round(cosine_similarity(emb1, emb2)[0][0] * 100, 2)
+    embeddings = TEXT_MODEL.encode([t1, t2])
+    return round(cosine_similarity([embeddings[0]], [embeddings[1]])[0][0] * 100, 2)
 
-
-# ------------------- Diagram/Image Utilities --------------------
 def extract_images_from_pdf(pdf_path, output_folder, prefix):
-    """Extract potential diagram images from a PDF and save filtered ones."""
     doc = fitz.open(pdf_path)
     extracted_imgs, saved_paths = [], []
 
     for page_no in range(len(doc)):
-        for idx, img in enumerate(doc[page_no].get_images(full=True)):
+        images = doc[page_no].get_images(full=True)
+        for idx, img in enumerate(images):
             xref = img[0]
             base_image = doc.extract_image(xref)
             img_data = np.frombuffer(base_image["image"], np.uint8)
             img_cv = cv2.imdecode(img_data, cv2.IMREAD_COLOR)
-            img_cv = cv2.resize(img_cv, (img_cv.shape[1]*2, img_cv.shape[0]*2))
 
-            # Preprocessing for contour detection
-            gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
-            blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-            sharpened = cv2.filter2D(blurred, -1, np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]]))
-            thresh = cv2.adaptiveThreshold(sharpened, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                                           cv2.THRESH_BINARY_INV, 11, 2)
-            contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            if len([c for c in contours if cv2.contourArea(c) > 500]) > 2:
-                filename = f"{prefix}_page{page_no}_img{idx}.png"
+            if img_cv is not None:
+                img_cv = cv2.resize(img_cv, (img_cv.shape[1] * 2, img_cv.shape[0] * 2))
+                gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
+                blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+                sharpened = cv2.filter2D(blurred, -1, np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]]))
+                thresh = cv2.adaptiveThreshold(sharpened, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                               cv2.THRESH_BINARY_INV, 11, 2)
+                contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+                if len([c for c in contours if cv2.contourArea(c) > 500]) > 2:
+                    filename = f"{prefix}_page{page_no}_img{idx}.png"
+                    path = os.path.join(output_folder, filename)
+                    cv2.imwrite(path, img_cv)
+                    extracted_imgs.append(img_cv)
+                    saved_paths.append(path)
+
+    return extracted_imgs, saved_paths
+
+def extract_images_from_docx(docx_path, output_folder, prefix):
+    doc = docx.Document(docx_path)
+    extracted_imgs, saved_paths = [], []
+
+    for idx, rel in enumerate(doc.part.rels.values()):
+        if "image" in rel.reltype:
+            img_data = rel.target_part.blob
+            img_array = np.frombuffer(img_data, np.uint8)
+            img_cv = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+
+            if img_cv is not None:
+                filename = f"{prefix}_img{idx}.png"
                 path = os.path.join(output_folder, filename)
                 cv2.imwrite(path, img_cv)
                 extracted_imgs.append(img_cv)
@@ -897,164 +945,212 @@ def extract_images_from_pdf(pdf_path, output_folder, prefix):
 
     return extracted_imgs, saved_paths
 
+def extract_images(path, output_folder, prefix):
+    if is_pdf(path):
+        return extract_images_from_pdf(path, output_folder, prefix)
+    elif is_docx(path):
+        return extract_images_from_docx(path, output_folder, prefix)
+    return [], []
+
 def extract_text_from_images(images):
-    """Apply OCR on a list of images to extract textual content."""
     return "\n".join(pytesseract.image_to_string(Image.fromarray(img)) for img in images)
 
-def compare_diagram_similarity(t1, t2):
-    """Compute cosine similarity between two diagram-extracted texts."""
-    emb1, emb2 = IMG_MODEL.encode([t1]), IMG_MODEL.encode([t2])
-    return round(cosine_similarity(emb1, emb2)[0][0] * 100, 2)
-
-
-# ------------------- Grammar & Timeliness --------------------
 def calculate_grammar_score(text):
     """Return grammar score out of 10 based on simple word-level corrections."""
     blob = TextBlob(text)
     errors = sum(1 for word in blob.words if word != word.correct())
     return 10 if errors == 0 else 9 if errors <= 5 else 8
 
-def mark_late(submission, due_date):
-    """Flag submission as late based on assignment's due date."""
-    aware_due = make_aware(due_date, get_current_timezone()) if is_naive(due_date) else due_date
-    submission.is_late = timezone.now() > aware_due
-
-
-# ------------------- Plagiarism --------------------
 def calculate_plagiarism_scores(assignment):
-    """Update plagiarism score for all submissions of an assignment."""
     submissions = Submission.objects.filter(assignment=assignment)
     texts = [s.preprocessed_content or "" for s in submissions]
     tfidf = TfidfVectorizer().fit_transform(texts)
 
-    with transaction.atomic():
-        for i, sub in enumerate(submissions):
-            total_sim = sum(cosine_similarity(tfidf[i], tfidf[j])[0][0]
-                            for j in range(len(submissions)) if i != j)
-            avg_sim = (total_sim / (len(submissions) - 1)) * 100 if len(submissions) > 1 else 0
-            sub.plagiarism_score = round(avg_sim, 2)
-            sub.save()
+    for i, sub in enumerate(submissions):
+        similarities = [
+            cosine_similarity(tfidf[i], tfidf[j])[0][0]
+            for j in range(len(submissions)) if i != j
+        ]
+        avg_sim = (sum(similarities) / len(similarities)) * 100 if similarities else 0
+        sub.plagiarism_score = round(avg_sim, 2)
+        sub.save()
 
-# ------------------- Grade & Feedback --------------------
-def calculate_total_grade(sub):
-    """Calculate total marks and assign grade and feedback."""
-    score = (
-        sub.text_similarity_score * 0.4 +
+
+# ---------------------- View Functions ----------------------
+
+@login_required
+@user_passes_test(lambda u: hasattr(u, 'student_profile'))
+def submit_assignment(request, assignment_id):
+    assignment = get_object_or_404(Assignment, id=assignment_id)
+    student_profile = request.user.student_profile
+
+    if request.method == 'POST':
+        form = SubmissionForm(request.POST, request.FILES)
+        if form.is_valid():
+            submission = form.save(commit=False)
+            submission.student = student_profile
+            submission.assignment = assignment
+            submission.submitted_at = timezone.now()
+            submission.is_late = timezone.now() > assignment.due_date
+
+            if submission.is_late and not submission.student_comments:
+                messages.error(request, "Since you are submitting after the deadline, you must provide a comment explaining the delay.")
+                return render(request, 'submit_assignment.html', {
+                    'form': form,
+                    'assignment': assignment
+                })
+        
+            submission.save()
+
+            evaluate_submission(submission.id)
+
+            messages.success(request, 'Assignment submitted and evaluated successfully!')
+            return redirect('student_dashboard')
+    else:
+        form = SubmissionForm()
+
+    return render(request, 'submit_assignment.html', {'form': form, 'assignment': assignment})
+
+def evaluate_submission(submission_id):
+    sub = Submission.objects.get(id=submission_id)
+    assignment = sub.assignment
+
+    # ----- Text Extraction and Saving -----
+    student_text = extract_text(sub.file.path)
+    teacher_text = extract_text(assignment.model_answer_file.path)
+
+    sub.content = student_text  # ✅ Save extracted raw text to `content`
+
+    preprocessed_student_text = preprocess_text(student_text)
+    preprocessed_teacher_text = preprocess_text(teacher_text)
+    sub.preprocessed_content = preprocessed_student_text
+
+    # ----- Text Similarity -----
+    sub.text_similarity_score = compare_text_similarity(preprocessed_teacher_text, preprocessed_student_text)
+
+    # Save extracted student text into a file inside MEDIA (optional enhancement)
+    student_text_path = f"student_texts/submission_{sub.id}.txt"
+    full_text_path = os.path.join(settings.MEDIA_ROOT, student_text_path)
+    os.makedirs(os.path.dirname(full_text_path), exist_ok=True)
+    with open(full_text_path, 'w', encoding='utf-8') as f:
+        f.write(student_text)
+    sub.text_file = student_text_path  # Assuming you have a `text_file = models.FileField` in your model (optional)
+
+    # ----- Diagram Text Extraction and Saving -----
+    teacher_imgs, _ = extract_images(assignment.model_answer_file.path, 'teacher_images', 'teacher')
+    student_imgs, _ = extract_images(sub.file.path, 'student_images', 'student')
+
+    teacher_diagram_text = extract_text_from_images(teacher_imgs)
+    student_diagram_text = extract_text_from_images(student_imgs)
+
+    sub.image_text = student_diagram_text  # ✅ Save extracted image text into `image_text`
+
+    # Save extracted image text into a file inside MEDIA (optional enhancement)
+    student_image_text_path = f"student_image_texts/submission_{sub.id}.txt"
+    full_image_text_path = os.path.join(settings.MEDIA_ROOT, student_image_text_path)
+    os.makedirs(os.path.dirname(full_image_text_path), exist_ok=True)
+    with open(full_image_text_path, 'w', encoding='utf-8') as f:
+        f.write(student_diagram_text)
+    sub.image_text_file = student_image_text_path  # Assuming you have a `image_text_file = models.FileField` (optional)
+
+    # ----- Image Similarity -----
+    image_sim = compare_text_similarity(teacher_diagram_text, student_diagram_text)
+
+    if image_sim > 50:
+        sub.image_similarity_score = 100.0  # ✅ Force to 100
+    else:
+        sub.image_similarity_score = 50.0  # ✅ Force to 50
+
+    # ----- Grammar Score -----
+    sub.grammar_score = calculate_grammar_score(preprocessed_student_text)
+
+    # ----- Provisional Marks and Grade (Before Plagiarism) -----
+    provisional_score = (
+        sub.text_similarity_score * 0.5 +
         sub.image_similarity_score * 0.3 +
-        sub.grammar_score * 1 +
-        (100 - sub.plagiarism_score) * 0.2
+        sub.grammar_score * 2
     )
+    sub.provisional_marks = round(provisional_score, 2)
 
-    for threshold, grade, remark in [
-        (91, "A1", "Outstanding performance! Keep up the hard work."),
-        (81, "A2", "Great job! A little more effort can take you to the top."),
-        (71, "B1", "Impressive work! Keep focusing and improving."),
-        (61, "B2", "You're on the right track! Practice more to excel."),
-        (51, "C1", "Decent effort, but there's room for improvement."),
-        (41, "C2", "Fair work, but strive to be better."),
-        (33, "D", "Needs more effort. Try to improve next time."),
-        (0,  "E", "Poor performance. Please seek help to understand the material.")
+    # Set Provisional Grade and Feedback
+    for threshold, grade, feedback in [
+        (91, "A1", "Awesome start! You're on fire!"),
+        (81, "A2", "Great submission! Just a little polish needed."),
+        (71, "B1", "Good job! Focus on refining small mistakes."),
+        (61, "B2", "Nice effort! More careful work will boost your marks."),
+        (51, "C1", "You’re doing okay, but review the concepts again."),
+        (41, "C2", "You're halfway there! Keep practicing."),
+        (33, "D", "Needs improvement, but you have potential!"),
+        (0,  "E", "Please meet your teacher for help. You can do better!"),
     ]:
-        if score >= threshold:
-            sub.grade = grade
-            sub.feedback = remark
+        if provisional_score >= threshold:
+            sub.grade_before_plagiarism = grade  # ✅ Save grade before plagiarism
+            sub.feedback_before_plagiarism = feedback  # ✅ Save feedback before plagiarism
             break
 
-    sub.total_marks = round(score, 2)
     sub.save()
 
 
-# ------------------- Evaluation Entry Point --------------------
-def evaluate_submission(submission_id):
-    """Main function to evaluate a submission."""
-    try:
-        sub = Submission.objects.get(id=submission_id)
-        assignment = sub.assignment
 
-        # --- TEXT SIMILARITY ---
-        teacher_text = preprocess_text(extract_text_from_pdf(assignment.model_answer_file.path))
-        student_text = preprocess_text(extract_text_from_pdf(sub.file.path))
-        sub.content = student_text
-        sub.preprocessed_content = student_text
-        sub.text_similarity_score = compare_text_similarity(teacher_text, student_text)
+def finalize_submissions_after_deadline(assignment_id):
+    assignment = Assignment.objects.get(id=assignment_id)
+    submissions = Submission.objects.filter(assignment=assignment)
 
-        # --- DIAGRAM SIMILARITY ---
-        teacher_imgs, _ = extract_images_from_pdf(assignment.model_answer_file.path, TEACHER_IMG_DIR, 'teacher')
-        student_imgs, student_paths = extract_images_from_pdf(sub.file.path, STUDENT_IMG_DIR, 'student')
-        t_text = extract_text_from_images(teacher_imgs)
-        s_text = extract_text_from_images(student_imgs)
-        sub.image_text = s_text
-        sub.image_similarity_score = compare_diagram_similarity(t_text, s_text)
+    calculate_plagiarism_scores(assignment)
 
-        # Save first student diagram
-        if student_paths:
-            with open(student_paths[0], 'rb') as img_file:
-                sub.extracted_images.save(os.path.basename(student_paths[0]), File(img_file), save=False)
+    for sub in submissions:
+        # Final Grade Calculation after adding plagiarism impact
+        score = (
+            sub.text_similarity_score * 0.4 +
+            sub.image_similarity_score * 0.3 +
+            sub.grammar_score * 1 +
+            (100 - sub.plagiarism_score) * 0.2
+        )
+        sub.final_marks = round(score, 2)
 
-        # --- GRAMMAR + LATE ---
-        sub.grammar_score = calculate_grammar_score(student_text)
-        mark_late(sub, assignment.due_date)
+        for threshold, grade, feedback in [
+            (91, "A1", "Outstanding performance! Keep up the hard work."),
+            (81, "A2", "Great job! A little more effort can take you to the top."),
+            (71, "B1", "Impressive work! Keep focusing and improving."),
+            (61, "B2", "You're on the right track! Practice more to excel."),
+            (51, "C1", "Decent effort, but there's room for improvement."),
+            (41, "C2", "Fair work, but strive to be better."),
+            (33, "D", "Needs more effort. Try to improve next time."),
+            (0,  "E", "Poor performance. Please seek help to understand the material."),
+        ]:
+            if score >= threshold:
+                sub.grade_after_plagiarism = grade  # ✅ Save grade after plagiarism
+                sub.feedback_after_plagiarism = feedback  # ✅ Save feedback after plagiarism
+                break
+
         sub.save()
 
-        # --- PLAGIARISM + GRADING ---
-        calculate_plagiarism_scores(assignment)
-        calculate_total_grade(sub)
 
-        logger.info(f"✅ Evaluation complete for submission ID {submission_id}")
 
-    except Exception as e:
-        logger.error(f"❌ Error in evaluating submission {submission_id}: {e}")
-
-# views.py
-from django.contrib.auth.models import Group
+from django.shortcuts import render, get_object_or_404
+from .models import Assignment, Submission, StudentProfile
 
 def progress_view(request, assignment_id):
-    print("Assignment ID received:", assignment_id)
-
-    assignment = get_object_or_404(Assignment, id=assignment_id)
-    all_submissions = Submission.objects.filter(assignment=assignment).select_related('student')
-
-    # Check if user is a student
-    if hasattr(request.user, 'studentprofile'):
-        student_profile = get_object_or_404(StudentProfile, student=request.user)
-        student_submission = Submission.objects.filter(student=student_profile, assignment=assignment).first()
-        student_marks = student_submission.total_marks if student_submission else 0
-
-        student_marks_list = [
-            {
-                "id": sub.student.student.id,
-                "name": sub.student.student.first_name,
-                "marks": sub.total_marks
-            }
-            for sub in all_submissions if sub.student != student_profile
-        ]
-
-        context = {
-            "assignment_title": assignment.title,
-            "student_marks": student_marks,
-            "student_name": student_profile.name,
-            "student_marks_list": student_marks_list,
-        }
-
-    else:
-        # For teacher or admin view
-        student_marks_list = [
-            {
-                "id": sub.student.student.id,
-                "name": sub.student.student.first_name,
-                "marks": sub.total_marks
-            }
-            for sub in all_submissions
-        ]
-
-        context = {
-            "assignment_title": assignment.title,
-            "student_marks": None,
-            "student_name": "Teacher View",
-            "student_marks_list": student_marks_list,
-        }
-
-    return render(request, "progress_chart.html", context)
+    assignment = Assignment.objects.get(id=assignment_id)
+    # Assuming you have a method to get the student submissions
+    student_submissions = Submission.objects.filter(assignment=assignment)
+    
+    # Fetch final marks and provisional marks for each student
+    student_marks_list = []
+    for submission in student_submissions:
+        student_marks_list.append({
+            'id': submission.student.student.id,
+            'name': submission.student.name,
+            'provisional_marks': submission.provisional_marks,
+            'final_marks': submission.final_marks,
+        })
+    
+    # Pass both provisional and final marks to the new template
+    return render(request, 'progress_chart.html', {
+        'assignment_title': assignment.title,
+        'student_marks_list': student_marks_list,
+        'role': 'student',  # Assuming the role is passed in the context
+    })
 
 
 @login_required
@@ -1119,6 +1215,32 @@ def notify_students_of_new_assignment(assignment_id):
         if not submission or not submission.submitted:
             message = f"You have a new assignment: '{assignment.title}'. Please submit it before the due date."
             create_notification(student, message)  # Create a notification instance
+
+
+# Notify teacher and student in case of plagiarism
+def notify_teacher_and_student(submission, teacher_email, plagiarism_score):
+    """Sends an alert email to the teacher and student about plagiarism detection."""
+    message = (
+        f"Hello,\n\nA submission from {submission.student.student.email} has a plagiarism score of {plagiarism_score:.2f}%.\n"
+        f"Assignment: {submission.assignment.title}\n\nPlease review it.\n\nBest regards,\nSubmitTech"
+    )
+    send_mail(
+        "⚠️ Plagiarism Alert: High Similarity Detected!",
+        message,
+        'noreply@submitech.com',
+        [teacher_email, submission.student.student.email]
+    )
+
+def send_notifications():
+    """Sends reminder emails to students who haven't submitted their assignments."""
+    pending_students = CustomUser.objects.filter(role="student", submission__isnull=True).distinct()
+    for student in pending_students:
+        send_mail(
+            '⏳ Assignment Reminder',
+            '📌 You have pending assignments. Please submit before the deadline.',
+            'admin@submittech.com',
+            [student.email],
+            fail_silently=True)
 
 # Function to create a new notification
 def create_notification(student, message):

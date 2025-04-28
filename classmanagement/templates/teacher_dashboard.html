@@ -6,115 +6,128 @@
 <div class="container">
     <h2 class="text-center">Teacher Dashboard</h2>
 
-    <!-- Profile & Logout Buttons -->
-    <div class="text-end">
-        <a href="{% url 'teacher_profile' %}" class="btn me-2" style="background-color: #6f42c1; color: white;">Profile</a>
-        <a href="{% url 'logout' %}" class="btn" style="background-color: #6f42c1; color: white;">Logout</a>
-    </div>
-    
-
-    <!-- ✅ All Students Performance Table -->
-    <h3 class="mt-4">Student Assignments & Performance</h3>
-    <table class="table table-bordered">
-        <thead class="table-light">
-            <tr class="text-center">
-                <th>Student Name</th>
-                <th>Assignment</th>
-                <th>Submitted On Time</th>
-                <th>Text</th>
-                <th>Diagram</th>
-                <th>Plagiarism Score (%)</th>
-                <th>Total Marks</th>
-                <th>Grade</th>
-                <th>Feedback</th>
-                <th>Progress</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for student_performance in performance_data %}
-                {% with assignments=student_performance.assignments %}
-                    {% if assignments %}
-                        {% for submission in assignments %}
-                        <tr>
-                            {% if forloop.first %}
-                                <td rowspan="{{ assignments|length }}" class="align-middle text-center fw-bold">
-                                    {{ student_performance.student.student.get_full_name }}
-                                </td>
-                            {% endif %}
-                            <td>{{ submission.assignment.title }}</td>
-                            <td class="text-center">
-                                {% if not submission.is_late %}  {# ✅ Show ✅ if not late #}
-                                    <span class="text-success fw-bold">✅</span>
-                                {% else %}
-                                    <span class="text-danger fw-bold">❌ Late</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-center">{{ submission.text_similarity_score|floatformat:2 }}%</td>
-                            <td class="text-center">{{ submission.image_similarity_score|floatformat:2 }}%</td>
-                            <td class="text-center">
-                                {% if submission.plagiarism_score > 50 %}
-                                    <span class="text-danger fw-bold">{{ submission.plagiarism_score|floatformat:2 }}%</span>
-                                {% else %}
-                                    <span class="text-success fw-bold">{{ submission.plagiarism_score|floatformat:2 }}%</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-center">{{ submission.marks }}</td>
-                            <td class="text-center">{{ submission.grade }}</td>
-                            <td class="text-center">{{ submission.feedback }}</td>
-                            <td>
-                                {% if assignment.id %}
-                                <a href="{% url 'progress_chart' assignment.id %}" class="btn btn-sm btn-primary">View Progress</a>
-                              {% else %}
-                                <span class="text-muted">No assignment found</span>
-                              {% endif %}
-                              
-                            </td>                            
-                        </tr>
-                        {% endfor %}
-                    {% else %}
-                        <tr>
-                            <td class="text-center fw-bold">{{ student_performance.student.student.get_full_name }}</td>
-                            <td colspan="8" class="text-center">No submissions available.</td>
-                        </tr>
-                    {% endif %}
-                {% endwith %}
-            {% empty %}
-                <tr>
-                    <td colspan="9" class="text-center">No students have submitted assignments.</td>
-                </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-
-    <!-- ✅ Top 3 Best Performers -->
-    <h3 class="mt-4">Top 3 Best Performing Students</h3>
-    <table class="table table-bordered">
-        <thead class="table-light">
-            <tr class="text-center">
-                <th>Rank</th>
-                <th>Student Name</th>
-                <th>Total Score</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for student in top_students %}
-                <tr class="text-center">
-                    <td>
-                        {% if forloop.counter == 1 %}🥇{% elif forloop.counter == 2 %}🥈{% elif forloop.counter == 3 %}🥉{% endif %}
-                        {{ forloop.counter }}
-                    </td>
-                    <td>{{ student.student.student.get_full_name }}</td>
-                    <td>{{ student.total_score }}</td>
-                </tr>
-            {% empty %}
-                <tr>
-                    <td colspan="3" class="text-center">No data available.</td>
-                </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-
+<!-- Profile & Logout Buttons -->
+<div class="text-end">
+    <a href="{% url 'teacher_profile' %}" class="btn me-2" style="background-color: #6f42c1; color: white;">Profile</a>
+    <a href="{% url 'logout' %}" class="btn" style="background-color: #6f42c1; color: white;">Logout</a>
 </div>
+
+<!-- ✅ All Students Performance Section -->
+<h3 class="mt-4">Student Assignments & Performance</h3>
+<table class="table table-bordered">
+    <thead class="table-light">
+        <tr class="text-center">
+            <th>Student Name</th>
+            <th>Assignment</th>
+            <th>Submitted On Time</th>
+            <th>Text Similarity</th>
+            <th>Diagram Similarity</th>
+            <th>Provisional Marks</th>
+            <th>Grade Before Plagiarism</th>
+            <th>Feedback Before Plagiarism</th>
+            <th>Plagiarism Score (%)</th>
+            <th>Final Marks</th>
+            <th>Grade After Plagiarism</th>
+            <th>Feedback After Plagiarism</th>
+            <th>Progress</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for student_performance in performance_data %}
+            {% for assignment in student_performance.assignments %}
+                <tr class="text-center">
+                    <td class="align-middle fw-bold">{{ student_performance.student.student.get_full_name }}</td>
+
+                    <td>{{ assignment.assignment.title }}</td>
+
+                    <td>
+                        {% if not assignment.is_late %}
+                            <span class="text-success fw-bold">✅</span>
+                        {% else %}
+                            <span class="text-danger fw-bold">❌ Late</span>
+                        {% endif %}
+                    </td>
+
+                    <td>{{ assignment.text_similarity_score|floatformat:2 }}%</td>
+                    <td>{{ assignment.image_similarity_score|floatformat:2 }}%</td>
+
+                    <td>{{ assignment.provisional_marks|floatformat:2 }}</td>
+                    <td>{{ assignment.grade_before_plagiarism|default:"N/A" }}</td>
+                    <td>{{ assignment.feedback_before_plagiarism|default:"N/A" }}</td>
+
+                    <td>
+                        {% if assignment.plagiarism_score > 50 %}
+                            <span class="text-danger fw-bold">{{ assignment.plagiarism_score|floatformat:2 }}%</span>
+                        {% else %}
+                            <span class="text-success fw-bold">{{ assignment.plagiarism_score|floatformat:2 }}%</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ assignment.final_marks|floatformat:2 }}</td>
+                    <td>{{ assignment.grade_after_plagiarism|default:"N/A" }}</td>
+                    <td>{{ assignment.feedback_after_plagiarism|default:"N/A" }}</td>
+
+                    <td>
+                        <a href="{% url 'progress_chart' assignment.assignment.id %}" class="btn btn-sm btn-primary">
+                            View Progress
+                        </a>
+                    </td>
+                </tr>
+            {% endfor %}
+        {% empty %}
+            <tr>
+                <td colspan="13" class="text-center">No assignments available.</td>
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<!-- ✅ Top 3 Best Performers -->
+<h3 class="mt-4">Top 3 Best Performing Students</h3>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <h5 class="card-title">Top Performers</h5>
+        <table class="table table-bordered">
+            <thead class="table-light">
+                <tr class="text-center">
+                    <th>Rank</th>
+                    <th>Student Name</th>
+                    <th>Total Score</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for student in top_students %}
+                    <tr class="text-center">
+                        <td>
+                            {% if forloop.counter == 1 %}🥇{% elif forloop.counter == 2 %}🥈{% elif forloop.counter == 3 %}🥉{% endif %}
+                            {{ forloop.counter }}
+                        </td>
+                        <td>{{ student.student.student.get_full_name }}</td>  <!-- ✅ Corrected here -->
+                        <td>
+                            {% for submission in student.assignments %}
+                                {% if submission.final_marks %}
+                                    {{ submission.final_marks|floatformat:2 }}
+                                {% else %}
+                                    {{ submission.provisional_marks|floatformat:2 }}
+                                {% endif %}
+                            {% empty %}
+                                No marks available
+                            {% endfor %}
+                        </td>
+                        
+                        
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="3" class="text-center">No data available.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+
 
 <script>
     document.addEventListener("DOMContentLoaded", function () {

@@ -12,7 +12,6 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 from pathlib import Path
 import os
-import django_heroku
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -25,9 +24,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-uercg2kz^8_*5p0ueos-s)8ak)$pkew#r&a4t=ps5!y_#ce$s6'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
-ALLOWED_HOSTS = ['automatedassignmentevaluation-and-grading.onrender.com', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
 
 
@@ -180,5 +179,3 @@ STATIC_URL = 'static/'
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static'),]
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
-import dj_database_url
-DATABASES['default'] = dj_database_url.config(conn_max_age=600)

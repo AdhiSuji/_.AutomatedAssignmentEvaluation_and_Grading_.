@@ -12,37 +12,99 @@
 
 
       <!-- ✅ Grades Table -->
-    <h4>Your Submitted Assignments & Grades</h4>
-    <table class="table table-bordered mt-3">
-        <thead class="thead-dark">
-            <tr>
-                <th>Assignment</th>
-                <th>Marks</th>
-                <th>Grade</th>
-                <th>Feedback</th>
-                <th>Progress</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for submission in submissions %}
-            <tr>
-                <td>{{ submission.assignment.title }}</td>
-                <td>{{ submission.total_marks }}</td>
-                <td>{{ submission.grade }}</td>
-                <td>{{ submission.feedback }}</td>
-                <td>
-                  <a href="{% url 'progress_chart' submission.assignment.id %}" class="btn btn-primary">
-                    View 
-                </a>                                                      
-              </td>                           
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="5">No assignments submitted yet.</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+      <h4>Your Submitted Assignments & Grades</h4>
+      <div class="container">
+      
+          <!-- Marks Type Selector -->
+          <div class="mb-3">
+              <label for="marksType" class="form-label">Select Marks Type:</label>
+              <select id="marksType" class="form-select" onchange="window.location.href='{% url 'student_dashboard' class_id=current_class.id %}?marks_type=' + this.value;">
+                  <option value="provisional" {% if marks_type == 'provisional' %}selected{% endif %}>Provisional Marks</option>
+                  <option value="final" {% if marks_type == 'final' %}selected{% endif %}>Final Marks</option>
+              </select>
+          </div>
+      
+          <!-- Submissions Table -->
+          <table class="table table-bordered mt-3">
+              <thead class="thead-dark">
+                  <tr>
+                      <th>Assignment</th>
+                      <th>Marks</th>
+                      <th>Grade</th>
+                      <th>Feedback</th>
+                      <th>Progress</th>
+                  </tr>
+              </thead>
+              <tbody>
+                  {% for submission in submissions %}
+                  <tr>
+                      <td>{{ submission.assignment.title }}</td>
+      
+                      <!-- Fixed marks display (no getattr problem) -->
+                      <td>
+                          {% if marks_type == 'final' %}
+                              {{ submission.final_marks }}
+                          {% else %}
+                              {{ submission.provisional_marks }}
+                          {% endif %}
+                      </td>
+      
+                      <td>
+                        {% if marks_type == 'final' %}
+                            {{ submission.grade_after_plagiarism|default:"Not Graded" }}
+                        {% else %}
+                            {{ submission.grade_before_plagiarism|default:"Not Graded" }}
+                        {% endif %}
+                    </td>
+                    
+                      <td>
+                          {% if submission.feedback_after_plagiarism %}
+                              {{ submission.feedback_after_plagiarism }}
+                          {% else %}
+                              {{ submission.feedback_before_plagiarism }}
+                          {% endif %}
+                      </td>
+                      <td>
+                        {% if marks_type == 'final' %}
+                            {% if submission.final_marks %}
+                                <div class="progress">
+                                    <div class="progress-bar" role="progressbar" 
+                                         style="width: {{ submission.final_marks|floatformat:0 }}%;" 
+                                         aria-valuenow="{{ submission.final_marks|floatformat:0 }}" 
+                                         aria-valuemin="0" aria-valuemax="100">
+                                        {{ submission.final_marks|floatformat:0 }}%
+                                    </div>
+                                </div>
+                            {% else %}
+                                Not graded yet
+                            {% endif %}
+                        {% else %}
+                            {% if submission.provisional_marks %}
+                                <div class="progress">
+                                    <div class="progress-bar bg-info" role="progressbar" 
+                                         style="width: {{ submission.provisional_marks|floatformat:0 }}%;" 
+                                         aria-valuenow="{{ submission.provisional_marks|floatformat:0 }}" 
+                                         aria-valuemin="0" aria-valuemax="100">
+                                        {{ submission.provisional_marks|floatformat:0 }}%
+                                    </div>
+                                </div>
+                            {% else %}
+                                Not graded yet
+                            {% endif %}
+                        {% endif %}
+                    </td>
+                  </tr>
+                  {% empty %}
+                  <tr>
+                      <td colspan="4">No assignments submitted yet.</td>
+                  </tr>
+                  {% endfor %}
+              </tbody>
+          </table>
+      </div>
+      
+  
+  
 
     <!-- ✅ Top Performers in Class -->
     <h4 class="mt-5">🏆 Top 3 Performers in {{ current_class.name }}</h4>
@@ -173,7 +235,6 @@
           }, 800); // Wait for dashboard to settle
         }
       });
-    </script>
-          
+    </script>          
 
 {% endblock %}
