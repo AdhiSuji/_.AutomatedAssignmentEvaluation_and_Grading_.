@@ -1126,10 +1126,6 @@ def finalize_submissions_after_deadline(assignment_id):
         sub.save()
 
 
-
-from django.shortcuts import render, get_object_or_404
-from .models import Assignment, Submission, StudentProfile
-
 def progress_view(request, assignment_id):
     assignment = Assignment.objects.get(id=assignment_id)
     # Assuming you have a method to get the student submissions

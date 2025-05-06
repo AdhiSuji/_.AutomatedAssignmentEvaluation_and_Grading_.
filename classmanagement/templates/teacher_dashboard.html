@@ -3,16 +3,19 @@
 {% block title %}Teacher Dashboard{% endblock %}
 
 {% block content %}
+
 <div class="container">
     <h2 class="text-center">Teacher Dashboard</h2>
 
 <!-- Profile & Logout Buttons -->
+
 <div class="text-end">
     <a href="{% url 'teacher_profile' %}" class="btn me-2" style="background-color: #6f42c1; color: white;">Profile</a>
     <a href="{% url 'logout' %}" class="btn" style="background-color: #6f42c1; color: white;">Logout</a>
 </div>
 
 <!-- ✅ All Students Performance Section -->
+
 <h3 class="mt-4">Student Assignments & Performance</h3>
 <table class="table table-bordered">
     <thead class="table-light">
@@ -38,50 +41,54 @@
                 <tr class="text-center">
                     <td class="align-middle fw-bold">{{ student_performance.student.student.get_full_name }}</td>
 
-                    <td>{{ assignment.assignment.title }}</td>
 
-                    <td>
-                        {% if not assignment.is_late %}
-                            <span class="text-success fw-bold">✅</span>
-                        {% else %}
-                            <span class="text-danger fw-bold">❌ Late</span>
-                        {% endif %}
-                    </td>
+                <td>{{ assignment.assignment.title }}</td>
 
-                    <td>{{ assignment.text_similarity_score|floatformat:2 }}%</td>
-                    <td>{{ assignment.image_similarity_score|floatformat:2 }}%</td>
+                <td>
+                    {% if not assignment.is_late %}
+                        <span class="text-success fw-bold">✅</span>
+                    {% else %}
+                        <span class="text-danger fw-bold">❌ Late</span>
+                    {% endif %}
+                </td>
 
-                    <td>{{ assignment.provisional_marks|floatformat:2 }}</td>
-                    <td>{{ assignment.grade_before_plagiarism|default:"N/A" }}</td>
-                    <td>{{ assignment.feedback_before_plagiarism|default:"N/A" }}</td>
+                <td>{{ assignment.text_similarity_score|floatformat:2 }}%</td>
+                <td>{{ assignment.image_similarity_score|floatformat:2 }}%</td>
 
-                    <td>
-                        {% if assignment.plagiarism_score > 50 %}
-                            <span class="text-danger fw-bold">{{ assignment.plagiarism_score|floatformat:2 }}%</span>
-                        {% else %}
-                            <span class="text-success fw-bold">{{ assignment.plagiarism_score|floatformat:2 }}%</span>
-                        {% endif %}
-                    </td>
-                    <td>{{ assignment.final_marks|floatformat:2 }}</td>
-                    <td>{{ assignment.grade_after_plagiarism|default:"N/A" }}</td>
-                    <td>{{ assignment.feedback_after_plagiarism|default:"N/A" }}</td>
+                <td>{{ assignment.provisional_marks|floatformat:2 }}</td>
+                <td>{{ assignment.grade_before_plagiarism|default:"N/A" }}</td>
+                <td>{{ assignment.feedback_before_plagiarism|default:"N/A" }}</td>
 
-                    <td>
-                        <a href="{% url 'progress_chart' assignment.assignment.id %}" class="btn btn-sm btn-primary">
-                            View Progress
-                        </a>
-                    </td>
-                </tr>
-            {% endfor %}
-        {% empty %}
-            <tr>
-                <td colspan="13" class="text-center">No assignments available.</td>
+                <td>
+                    {% if assignment.plagiarism_score > 50 %}
+                        <span class="text-danger fw-bold">{{ assignment.plagiarism_score|floatformat:2 }}%</span>
+                    {% else %}
+                        <span class="text-success fw-bold">{{ assignment.plagiarism_score|floatformat:2 }}%</span>
+                    {% endif %}
+                </td>
+                <td>{{ assignment.final_marks|floatformat:2 }}</td>
+                <td>{{ assignment.grade_after_plagiarism|default:"N/A" }}</td>
+                <td>{{ assignment.feedback_after_plagiarism|default:"N/A" }}</td>
+
+                <td>
+                    <a href="{% url 'progress_chart' assignment.assignment.id %}" class="btn btn-sm btn-primary">
+                        View Progress
+                    </a>
+                </td>
             </tr>
         {% endfor %}
-    </tbody>
+    {% empty %}
+        <tr>
+            <td colspan="13" class="text-center">No assignments available.</td>
+        </tr>
+    {% endfor %}
+</tbody>
+
+
 </table>
 
 <!-- ✅ Top 3 Best Performers -->
+
 <h3 class="mt-4">Top 3 Best Performing Students</h3>
 
 <div class="card mb-3">
@@ -114,20 +121,20 @@
                                 No marks available
                             {% endfor %}
                         </td>
-                        
-                        
-                    </tr>
-                {% empty %}
-                    <tr>
-                        <td colspan="3" class="text-center">No data available.</td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+
+
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="3" class="text-center">No data available.</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 </div>
 
 
+</div>
 
 <script>
     document.addEventListener("DOMContentLoaded", function () {
