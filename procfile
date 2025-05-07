@@ -1,1 +1,1 @@
-web: gunicorn AssSubmission.wsgi:application --bind 0.0.0.0:$PORT
+web: gunicorn AssSubmission.wsgi:application 
