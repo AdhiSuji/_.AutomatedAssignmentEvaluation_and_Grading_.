@@ -12,6 +12,12 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 from pathlib import Path
 import os
+import dj_database_url
+from decouple import config
+import os
+
+print("DATABASE_URL from .env:", config('DATABASE_URL'))
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -24,9 +30,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-uercg2kz^8_*5p0ueos-s)8ak)$pkew#r&a4t=ps5!y_#ce$s6'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+#ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['.onrender.com']
 
 
 
@@ -82,15 +89,27 @@ WSGI_APPLICATION = 'AssSubmission.wsgi.application'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME':'SEMS',
-        'USER':'postgres',
-        'PASSWORD':'@dhiSuji03',
-        'HOST':'localhost',
-        'PORT':'5432',
+    'default': dj_database_url.config(default=config('DATABASE_URL'))
 }
-}
+
+
+#DATABASES = {
+#    'default': dj_database_url.config(default=config('DATABASE_URL')) {
+ #       'ENGINE': 'django.db.backends.postgresql',
+ #       'NAME':'SEMS',
+  #      'USER':'postgres',
+  #      'PASSWORD':'@dhiSuji03',
+   #     'HOST':'localhost',
+    #    'PORT':'5432',
+#}
+#}
+
+STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
+
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
@@ -174,8 +193,4 @@ CACHES = {
 USE_TZ = True
 TIME_ZONE = 'Asia/Kolkata'  # or your local timezone
 
-
-STATIC_URL = 'static/'
-STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static'),]
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
