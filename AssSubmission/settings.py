@@ -16,7 +16,6 @@ import dj_database_url
 from decouple import config
 import os
 
-print("DATABASE_URL from .env:", config('DATABASE_URL'))
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -33,7 +32,7 @@ SECRET_KEY = 'django-insecure-uercg2kz^8_*5p0ueos-s)8ak)$pkew#r&a4t=ps5!y_#ce$s6
 DEBUG = False
 
 #ALLOWED_HOSTS = ['localhost', '127.0.0.1']
-ALLOWED_HOSTS = ['.onrender.com']
+ALLOWED_HOSTS = ['.onrender.com', 'localhost', '127.0.0.1']
 
 
 
